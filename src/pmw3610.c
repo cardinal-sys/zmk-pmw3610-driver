@@ -386,6 +386,9 @@ static int pmw3610_report_data(const struct device *dev) {
         data->scroll_dy += y;
         data->snipe_dx = 0;
         data->snipe_dy = 0;
+        data->last_poll_time = 0;
+        data->last_x = 0;
+        data->last_y = 0;
 
         bool scrolled = false;
 
@@ -422,6 +425,9 @@ static int pmw3610_report_data(const struct device *dev) {
     if (pmw3610_layer_match(config->snipe_layers, config->snipe_layers_len)) {
         data->scroll_dx = 0;
         data->scroll_dy = 0;
+        data->last_poll_time = 0;
+        data->last_x = 0;
+        data->last_y = 0;
 
         data->snipe_dx += x;
         data->snipe_dy += y;
