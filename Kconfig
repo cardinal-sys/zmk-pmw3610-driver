@@ -94,6 +94,13 @@ config PMW3610_ALT_REST3_SAMPLE_TIME_MS
     help
       Default REST2 mode sample period in millisecond.
 
+config PMW3610_ALT_MOVEMENT_THRESHOLD
+    int "Minimum movement threshold to report"
+    default 0
+    help
+      Minimum XY displacement required before reporting.
+      Filters out sensor noise. 0 means no threshold.
+
 module = PMW3610_ALT
 module-str = PMW3610_ALT
 source "${ZEPHYR_BASE}/subsys/logging/Kconfig.template.log_config"
