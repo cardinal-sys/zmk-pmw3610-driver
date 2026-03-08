@@ -45,7 +45,7 @@ config PMW3610_ALT_CPI_DIVIDOR
 
 config PMW3610_ALT_SCROLL_TICK
   int "Scroll tick - accumulated delta before reporting one scroll unit"
-  default 64
+  default 20
   range 1 255
   help
     Number of sensor delta counts to accumulate before emitting one
