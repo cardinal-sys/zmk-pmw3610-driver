@@ -29,6 +29,11 @@ struct pixart_data {
     /* snipe mode accumulation (remainder carry-over) */
     int32_t                      snipe_dx;
     int32_t                      snipe_dy;
+
+    /* 2-sample accumulation (POLLING_RATE_125_SW equivalent) */
+    int64_t                      last_poll_time;
+    int16_t                      last_x;
+    int16_t                      last_y;
 };
 
 struct pixart_config {

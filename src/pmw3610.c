@@ -411,7 +411,7 @@ static int pmw3610_report_data(const struct device *dev) {
 #if IS_ENABLED(CONFIG_PMW3610_ALT_INVERT_SCROLL_X)
             hwheel = -hwheel;
 #endif
-            input_report_rel(dev, INPUT_REL_HWHEEL, hwheel, false, K_NO_WAIT);
+            input_report_rel(dev, INPUT_REL_HWHEEL, hwheel, false, K_FOREVER);
             data->scroll_dx %= CONFIG_PMW3610_ALT_SCROLL_TICK;
             scrolled = true;
         }
@@ -421,14 +421,14 @@ static int pmw3610_report_data(const struct device *dev) {
 #if IS_ENABLED(CONFIG_PMW3610_ALT_INVERT_SCROLL_Y)
             wheel = -wheel;
 #endif
-            input_report_rel(dev, INPUT_REL_WHEEL, wheel, false, K_NO_WAIT);
+            input_report_rel(dev, INPUT_REL_WHEEL, wheel, false, K_FOREVER);
             data->scroll_dy %= CONFIG_PMW3610_ALT_SCROLL_TICK;
             scrolled = true;
         }
 
         if (scrolled) {
             /* sync event */
-            input_report_rel(dev, INPUT_REL_WHEEL, 0, true, K_NO_WAIT);
+            input_report_rel(dev, INPUT_REL_WHEEL, 0, true, K_FOREVER);
         }
         return 0;
     }
@@ -452,10 +452,10 @@ static int pmw3610_report_data(const struct device *dev) {
         bool have_y = ry != 0;
 
         if (have_x) {
-            input_report(dev, config->evt_type, config->x_input_code, rx, !have_y, K_NO_WAIT);
+            input_report(dev, config->evt_type, config->x_input_code, rx, !have_y, K_FOREVER);
         }
         if (have_y) {
-            input_report(dev, config->evt_type, config->y_input_code, ry, true, K_NO_WAIT);
+            input_report(dev, config->evt_type, config->y_input_code, ry, true, K_FOREVER);
         }
         return 0;
     }
@@ -467,14 +467,25 @@ static int pmw3610_report_data(const struct device *dev) {
     data->snipe_dx  = 0;
     data->snipe_dy  = 0;
 
+    /* 2-sample accumulation: Dist版 POLLING_RATE_125_SW 相当
+     * 最初のサンプルは保持し、次のサンプルで合算して報告する
+     * 128ms 以上間隔が空いた場合はリセットして再開 */
+    int64_t curr_time = k_uptime_get();
+    if (data->last_poll_time == 0 || curr_time - data->last_poll_time > 128) {
+        data->last_poll_time = curr_time;
+        data->last_x = x;
+        data->last_y = y;
+        return 0;
+    } else {
+        x += data->last_x;
+        y += data->last_y;
+        data->last_poll_time = 0;
+        data->last_x = 0;
+        data->last_y = 0;
+    }
+
     dx += x;
     dy += y;
-
-#if CONFIG_PMW3610_ALT_REPORT_INTERVAL_MIN > 0
-    if (now - last_rpt_time < CONFIG_PMW3610_ALT_REPORT_INTERVAL_MIN) {
-        return 0;
-    }
-#endif
 
     int16_t rx = (int16_t)CLAMP(dx, INT16_MIN, INT16_MAX);
     int16_t ry = (int16_t)CLAMP(dy, INT16_MIN, INT16_MAX);
@@ -488,10 +499,10 @@ static int pmw3610_report_data(const struct device *dev) {
         dx = 0;
         dy = 0;
         if (have_x) {
-            input_report(dev, config->evt_type, config->x_input_code, rx, !have_y, K_NO_WAIT);
+            input_report(dev, config->evt_type, config->x_input_code, rx, !have_y, K_FOREVER);
         }
         if (have_y) {
-            input_report(dev, config->evt_type, config->y_input_code, ry, true, K_NO_WAIT);
+            input_report(dev, config->evt_type, config->y_input_code, ry, true, K_FOREVER);
         }
     }
 
@@ -554,8 +565,11 @@ static int pmw3610_init(const struct device *dev) {
     data->scroll_dx = 0;
     data->scroll_dy = 0;
     /* scroll_dx/dy はリセットしない：レイヤー切替時にカーソル移動量を引き継ぎ即スクロール発火 */
-    data->snipe_dx  = 0;
-    data->snipe_dy  = 0;
+    data->snipe_dx     = 0;
+    data->snipe_dy     = 0;
+    data->last_poll_time = 0;
+    data->last_x       = 0;
+    data->last_y       = 0;
 
     k_work_init(&data->trigger_work, pmw3610_work_callback);
 
