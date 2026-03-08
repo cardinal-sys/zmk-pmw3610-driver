@@ -299,9 +299,7 @@ static int pmw3610_async_init_configure(const struct device *dev) {
         err = pmw3610_read_reg(dev, reg, buf);
     }
 
-    /* Performance register: 0xF0=force-awake bits | 0x0D=250Hz polling rate (Dist equivalent) */
     if (!err) err = pmw3610_set_performance(dev, true);
-    if (!err) err = pmw3610_write(dev, PMW3610_REG_PERFORMANCE, 0x0D);
     if (!err) err = pmw3610_set_cpi(dev, config->cpi, config->swap_xy, config->inv_x, config->inv_y);
     if (!err) err = pmw3610_set_downshift_time(dev, PMW3610_REG_RUN_DOWNSHIFT,  CONFIG_PMW3610_ALT_RUN_DOWNSHIFT_TIME_MS);
     if (!err) err = pmw3610_set_downshift_time(dev, PMW3610_REG_REST1_DOWNSHIFT, CONFIG_PMW3610_ALT_REST1_DOWNSHIFT_TIME_MS);
