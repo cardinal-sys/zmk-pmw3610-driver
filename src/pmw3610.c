@@ -476,7 +476,12 @@ static int pmw3610_report_data(const struct device *dev) {
     }
     last_smp_time = now;
 #endif
-
+	
+#if CONFIG_PMW3610_ALT_MOVEMENT_THRESHOLD > 0
+    if (abs(x) < CONFIG_PMW3610_ALT_MOVEMENT_THRESHOLD) x = 0;
+    if (abs(y) < CONFIG_PMW3610_ALT_MOVEMENT_THRESHOLD) y = 0;
+    if (x == 0 && y == 0) return 0;
+#endif
     // accumulate delta until report in next iteration
     dx += x;
     dy += y;
