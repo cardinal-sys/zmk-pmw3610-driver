@@ -348,9 +348,6 @@ static int pmw3610_report_data(const struct device *dev) {
         return -EBUSY;
     }
 
-    static int64_t dx = 0;
-    static int64_t dy = 0;
-
     int err = pmw3610_read(dev, PMW3610_REG_MOTION_BURST, buf, PMW3610_BURST_SIZE);
     if (err) {
         return err;
@@ -470,26 +467,17 @@ static int pmw3610_report_data(const struct device *dev) {
         data->last_y = 0;
     }
 
-    dx += x;
-    dy += y;
+    bool have_x = x != 0;
+    bool have_y = y != 0;
 
-    int16_t rx = (int16_t)CLAMP(dx, INT16_MIN, INT16_MAX);
-    int16_t ry = (int16_t)CLAMP(dy, INT16_MIN, INT16_MAX);
-    bool have_x = rx != 0;
-    bool have_y = ry != 0;
-
-    if (have_x || have_y) {
-        dx = 0;
-        dy = 0;
-        if (have_x) {
-            input_report(dev, config->evt_type, config->x_input_code, rx, !have_y, K_FOREVER);
-        }
-        if (have_y) {
-            input_report(dev, config->evt_type, config->y_input_code, ry, true, K_FOREVER);
-        }
+    if (have_x) {
+        input_report(dev, config->evt_type, config->x_input_code, x, !have_y, K_FOREVER);
+    }
+    if (have_y) {
+        input_report(dev, config->evt_type, config->y_input_code, y, true, K_FOREVER);
     }
 
-    return err;
+    return 0;
 }
 
 //////// Callbacks ////////
@@ -547,7 +535,6 @@ static int pmw3610_init(const struct device *dev) {
     data->sw_smart_flag = false;
     data->scroll_dx = 0;
     data->scroll_dy = 0;
-    /* scroll_dx/dy はリセットしない：レイヤー切替時にカーソル移動量を引き継ぎ即スクロール発火 */
     data->snipe_dx     = 0;
     data->snipe_dy     = 0;
     data->last_poll_time = 0;
