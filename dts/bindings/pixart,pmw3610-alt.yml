@@ -32,3 +32,17 @@ properties:
     type: boolean
   force-awake-4ms-mode:
     type: boolean
+  scroll-layers:
+    type: array
+    description: |
+      Layer numbers that activate scroll mode.
+      Driver emits WHEEL/HWHEEL instead of REL_X/REL_Y.
+      Speed controlled by CONFIG_PMW3610_ALT_SCROLL_TICK.
+      Example: scroll-layers = <5>;
+  snipe-layers:
+    type: array
+    description: |
+      Layer numbers that activate snipe (precision) mode.
+      Driver divides cursor movement by CONFIG_PMW3610_ALT_SNIPE_CPI_DIVIDOR,
+      with remainder carry-over for lossless precision.
+      Example: snipe-layers = <15>;
