@@ -463,8 +463,7 @@ static int pmw3610_report_data(const struct device *dev) {
     /* ======================================================
      * NORMAL CURSOR
      * ====================================================== */
-    data->scroll_dx = 0;
-    data->scroll_dy = 0;
+    /* scroll_dx/dy はリセットしない：レイヤー切替時にカーソル移動量を引き継ぎ即スクロール発火 */
     data->snipe_dx  = 0;
     data->snipe_dy  = 0;
 
@@ -554,6 +553,7 @@ static int pmw3610_init(const struct device *dev) {
     data->sw_smart_flag = false;
     data->scroll_dx = 0;
     data->scroll_dy = 0;
+    /* scroll_dx/dy はリセットしない：レイヤー切替時にカーソル移動量を引き継ぎ即スクロール発火 */
     data->snipe_dx  = 0;
     data->snipe_dy  = 0;
 
