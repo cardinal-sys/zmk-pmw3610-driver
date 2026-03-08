@@ -28,78 +28,84 @@ config PMW3610_ALT_INVERT_X
 config PMW3610_ALT_INVERT_Y
   bool "Invert the Y axis of PMW3610 sensor"
 
+config PMW3610_ALT_ORIENTATION_180
+  bool "Rotate sensor 180 degrees (invert both X and Y axes)"
+  help
+    Equivalent to CONFIG_PMW3610_ORIENTATION_180 in the original driver.
+    When enabled, both X and Y axes are inverted regardless of the
+    invert-x / invert-y device tree properties.
+
+config PMW3610_ALT_CPI_DIVIDOR
+  int "CPI divisor"
+  default 1
+  range 1 12
+  help
+    Divides the CPI value set in the device tree node.
+    1 means no division (default).
+
+config PMW3610_ALT_SCROLL_TICK
+  int "Scroll tick - accumulated delta before reporting one scroll unit"
+  default 64
+  range 1 255
+  help
+    Number of sensor delta counts to accumulate before emitting one
+    WHEEL / HWHEEL scroll event. Higher value = slower scroll.
+
+config PMW3610_ALT_INVERT_SCROLL_X
+  bool "Invert horizontal scroll (HWHEEL) direction"
+
+config PMW3610_ALT_INVERT_SCROLL_Y
+  bool "Invert vertical scroll (WHEEL) direction"
+
+config PMW3610_ALT_SNIPE_CPI_DIVIDOR
+  int "CPI divisor applied in snipe-layers"
+  default 4
+  range 1 12
+  help
+    Divides cursor movement in snipe-layers before reporting.
+    Remainders are accumulated and carried over between reports.
+    Higher value = slower, more precise cursor.
+
 config PMW3610_ALT_INIT_POWER_UP_EXTRA_DELAY_MS
   int "Extra power up init delay (ms)"
   default 0
-  help
-    Default minimum init power up delay is 10ms.
-    Use this config to postpone init power up sequence if needs longer bootup time.
 
 config PMW3610_ALT_REPORT_INTERVAL_MIN
 	int "PMW3610's default minimum report rate"
 	default 0
-	help
-	  Default minimum report interval in milliseconds.
-		Slow down input reporting for hid queue over the air.
-		Turn value down to 8ms to get sharp response if use with USB only.
 
 config PMW3610_ALT_SMART_ALGORITHM
   bool "Enable an algorithm of PMW3610 to enhance surface coverage"
   default y
-  help
-    Enable the integration of the smart algorithm as the datasheet implementation.
-    The algorithm is used to extend the tracking acrocss a wider range of surfaces
-    such as graniles and tiles.
 
 config PMW3610_ALT_RUN_DOWNSHIFT_TIME_MS
     int "PMW3610's default RUN mode downshift time"
     default 128
     range 13 3264
-    help
-      Default RUN mode downshift down time in milliseconds.
-      Time after which sensor goes from RUN to REST1 mode.
 
 config PMW3610_ALT_REST1_DOWNSHIFT_TIME_MS
     int "PMW3610's default REST1 mode downshift time"
     default 5000
-    help
-      Default REST1 mode downshift down time in milliseconds.
-      Time after which sensor goes from REST1 to REST2 mode.
 
 config PMW3610_ALT_REST2_DOWNSHIFT_TIME_MS
     int "PMW3610's default REST2 mode downshift time"
     default 17000
-    help
-      Default REST2 mode downshift down time in milliseconds.
-      Time after which sensor goes from REST2 to REST3 mode.
 
 config PMW3610_ALT_REST1_SAMPLE_TIME_MS
     int "PMW3610's sample time in REST1 stage"
     default 40
-    # range 10 2550
-    help
-      Default REST1 mode sample period in millisecond
 
 config PMW3610_ALT_REST2_SAMPLE_TIME_MS
     int "PMW3610's sample time in REST2 stage"
     default 100
-    # range 10 2550
-    help
-      Default REST2 mode sample period in millisecond.
 
 config PMW3610_ALT_REST3_SAMPLE_TIME_MS
     int "PMW3610's sample time in REST3 stage"
     default 500
-    # range 10 2550
-    help
-      Default REST2 mode sample period in millisecond.
 
 config PMW3610_ALT_MOVEMENT_THRESHOLD
     int "Minimum movement threshold to report"
     default 0
-    help
-      Minimum XY displacement required before reporting.
-      Filters out sensor noise. 0 means no threshold.
 
 module = PMW3610_ALT
 module-str = PMW3610_ALT
