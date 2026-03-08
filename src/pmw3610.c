@@ -299,7 +299,9 @@ static int pmw3610_async_init_configure(const struct device *dev) {
         err = pmw3610_read_reg(dev, reg, buf);
     }
 
+    /* Performance register: 0xF0=force-awake bits | 0x0D=250Hz polling rate (Dist equivalent) */
     if (!err) err = pmw3610_set_performance(dev, true);
+    if (!err) err = pmw3610_write(dev, PMW3610_REG_PERFORMANCE, 0x0D);
     if (!err) err = pmw3610_set_cpi(dev, config->cpi, config->swap_xy, config->inv_x, config->inv_y);
     if (!err) err = pmw3610_set_downshift_time(dev, PMW3610_REG_RUN_DOWNSHIFT,  CONFIG_PMW3610_ALT_RUN_DOWNSHIFT_TIME_MS);
     if (!err) err = pmw3610_set_downshift_time(dev, PMW3610_REG_REST1_DOWNSHIFT, CONFIG_PMW3610_ALT_REST1_DOWNSHIFT_TIME_MS);
@@ -351,12 +353,6 @@ static int pmw3610_report_data(const struct device *dev) {
     static int64_t dx = 0;
     static int64_t dy = 0;
 
-#if CONFIG_PMW3610_ALT_REPORT_INTERVAL_MIN > 0
-    static int64_t last_smp_time = 0;
-    static int64_t last_rpt_time = 0;
-    int64_t now = k_uptime_get();
-#endif
-
     int err = pmw3610_read(dev, PMW3610_REG_MOTION_BURST, buf, PMW3610_BURST_SIZE);
     if (err) {
         return err;
@@ -379,14 +375,6 @@ static int pmw3610_report_data(const struct device *dev) {
         pmw3610_write(dev, 0x32, 0x80);
         data->sw_smart_flag = true;
     }
-#endif
-
-#if CONFIG_PMW3610_ALT_REPORT_INTERVAL_MIN > 0
-    if (now - last_smp_time >= CONFIG_PMW3610_ALT_REPORT_INTERVAL_MIN) {
-        dx = 0;
-        dy = 0;
-    }
-    last_smp_time = now;
 #endif
 
 #if CONFIG_PMW3610_ALT_MOVEMENT_THRESHOLD > 0
@@ -493,9 +481,6 @@ static int pmw3610_report_data(const struct device *dev) {
     bool have_y = ry != 0;
 
     if (have_x || have_y) {
-#if CONFIG_PMW3610_ALT_REPORT_INTERVAL_MIN > 0
-        last_rpt_time = now;
-#endif
         dx = 0;
         dy = 0;
         if (have_x) {
