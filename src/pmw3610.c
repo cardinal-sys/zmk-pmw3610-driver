@@ -12,6 +12,9 @@
 #include <zephyr/pm/device.h>
 #include <zmk/keymap.h>
 #include <zmk/events/activity_state_changed.h>
+#include <zmk/events/keycode_state_changed.h>
+#include <zmk/hid_usage.h>
+#include <zmk/hid_usage_pages.h>
 #include "pmw3610.h"
 
 #include <zephyr/logging/log.h>
@@ -336,6 +339,27 @@ static void pmw3610_async_init(struct k_work *work) {
     }
 }
 
+//////// Arrows helper ////////
+
+static void pmw3610_send_arrow_key(uint32_t keycode) {
+    int64_t ts = k_uptime_get();
+    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(
+        .usage_page = HID_USAGE_KEY,
+        .keycode = keycode,
+        .implicit_modifiers = 0,
+        .explicit_modifiers = 0,
+        .state = true,
+        .timestamp = ts));
+    k_sleep(K_MSEC(10));
+    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(
+        .usage_page = HID_USAGE_KEY,
+        .keycode = keycode,
+        .implicit_modifiers = 0,
+        .explicit_modifiers = 0,
+        .state = false,
+        .timestamp = k_uptime_get()));
+}
+
 //////// Report data ////////
 
 static int pmw3610_report_data(const struct device *dev) {
@@ -386,6 +410,8 @@ static int pmw3610_report_data(const struct device *dev) {
         data->scroll_dy += y;
         data->snipe_dx = 0;
         data->snipe_dy = 0;
+        data->arrows_dx = 0;
+        data->arrows_dy = 0;
         data->last_poll_time = 0;
         data->last_x = 0;
         data->last_y = 0;
@@ -425,6 +451,8 @@ static int pmw3610_report_data(const struct device *dev) {
     if (pmw3610_layer_match(config->snipe_layers, config->snipe_layers_len)) {
         data->scroll_dx = 0;
         data->scroll_dy = 0;
+        data->arrows_dx = 0;
+        data->arrows_dy = 0;
         data->last_poll_time = 0;
         data->last_x = 0;
         data->last_y = 0;
@@ -450,15 +478,52 @@ static int pmw3610_report_data(const struct device *dev) {
     }
 
     /* ======================================================
+     * ARROWS LAYER: convert movement to arrow key presses
+     * Whichever axis has larger displacement wins.
+     * Diagonal input is suppressed.
+     * ====================================================== */
+    if (pmw3610_layer_match(config->arrows_layers, config->arrows_layers_len)) {
+        data->scroll_dx = 0;
+        data->scroll_dy = 0;
+        data->snipe_dx  = 0;
+        data->snipe_dy  = 0;
+        data->last_poll_time = 0;
+        data->last_x = 0;
+        data->last_y = 0;
+
+        data->arrows_dx += x;
+        data->arrows_dy += y;
+
+        int tick = config->arrows_tick;
+
+        if (abs(data->arrows_dx) >= tick || abs(data->arrows_dy) >= tick) {
+            uint32_t keycode;
+            if (abs(data->arrows_dx) >= abs(data->arrows_dy)) {
+                keycode = data->arrows_dx > 0
+                    ? HID_USAGE_KEY_KEYBOARD_RIGHT_ARROW
+                    : HID_USAGE_KEY_KEYBOARD_LEFT_ARROW;
+            } else {
+                keycode = data->arrows_dy > 0
+                    ? HID_USAGE_KEY_KEYBOARD_DOWN_ARROW
+                    : HID_USAGE_KEY_KEYBOARD_UP_ARROW;
+            }
+            data->arrows_dx = 0;
+            data->arrows_dy = 0;
+
+            pmw3610_send_arrow_key(keycode);
+        }
+        return 0;
+    }
+
+    /* ======================================================
      * NORMAL CURSOR
      * ====================================================== */
-    /* scroll_dx/dy はリセットしない：レイヤー切替時にカーソル移動量を引き継ぎ即スクロール発火 */
     data->snipe_dx  = 0;
     data->snipe_dy  = 0;
+    data->arrows_dx = 0;
+    data->arrows_dy = 0;
 
-    /* 2-sample accumulation: Dist版 POLLING_RATE_125_SW 相当
-     * 最初のサンプルは保持し、次のサンプルで合算して報告する
-     * 128ms 以上間隔が空いた場合はリセットして再開 */
+    /* 2-sample accumulation: Dist版 POLLING_RATE_125_SW 相当 */
     int64_t curr_time = k_uptime_get();
     if (data->last_poll_time == 0 || curr_time - data->last_poll_time > 128) {
         data->last_poll_time = curr_time;
@@ -543,6 +608,8 @@ static int pmw3610_init(const struct device *dev) {
     data->scroll_dy = 0;
     data->snipe_dx     = 0;
     data->snipe_dy     = 0;
+    data->arrows_dx    = 0;
+    data->arrows_dy    = 0;
     data->last_poll_time = 0;
     data->last_x       = 0;
     data->last_y       = 0;
@@ -628,6 +695,7 @@ static const struct sensor_driver_api pmw3610_driver_api = {
 #define PMW3610_DEFINE(n)                                                           \
     PMW3610_LAYERS_DEFINE(n, scroll_layers)                                         \
     PMW3610_LAYERS_DEFINE(n, snipe_layers)                                          \
+    PMW3610_LAYERS_DEFINE(n, arrows_layers)                                         \
     static struct pixart_data data##n;                                              \
     static const struct pixart_config config##n = {                                 \
         .spi = SPI_DT_SPEC_INST_GET(n, PMW3610_SPI_MODE, 0),                       \
@@ -645,6 +713,9 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .scroll_layers_len = PMW3610_LAYERS_LEN(n, scroll_layers),                 \
         .snipe_layers = PMW3610_LAYERS_PTR(n, snipe_layers),                       \
         .snipe_layers_len = PMW3610_LAYERS_LEN(n, snipe_layers),                   \
+        .arrows_layers = PMW3610_LAYERS_PTR(n, arrows_layers),                     \
+        .arrows_layers_len = PMW3610_LAYERS_LEN(n, arrows_layers),                 \
+        .arrows_tick = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),               \
     };                                                                              \
     DEVICE_DT_INST_DEFINE(n, pmw3610_init, NULL, &data##n, &config##n,             \
                           POST_KERNEL, CONFIG_INPUT_PMW3610_INIT_PRIORITY,          \
