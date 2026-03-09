@@ -46,3 +46,17 @@ properties:
       Driver divides cursor movement by CONFIG_PMW3610_ALT_SNIPE_CPI_DIVIDOR,
       with remainder carry-over for lossless precision.
       Example: snipe-layers = <15>;
+  arrows-layers:
+    type: array
+    description: |
+      Layer numbers that activate arrows mode.
+      Trackball movement is converted to arrow key presses (up/down/left/right).
+      Whichever axis has larger displacement wins; diagonal input is suppressed.
+      Example: arrows-layers = <3>;
+  arrows-tick:
+    type: int
+    default: 10
+    description: |
+      Accumulated delta before emitting one arrow key event.
+      Smaller value = more sensitive (fires more frequently).
+      Range: 1 - 255. Default: 10.
