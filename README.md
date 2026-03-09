@@ -121,7 +121,6 @@ CONFIG_PMW3610_ALT=y
 # CONFIG_PMW3610_ALT_SWAP_XY=y // <-- deprecated, use swap-xy; instead
 # CONFIG_PMW3610_ALT_INVERT_X=y // <-- deprecated, use invert-x; instead
 # CONFIG_PMW3610_ALT_INVERT_Y=y // <-- deprecated, use invert-y; instead
-# CONFIG_PMW3610_ALT_REPORT_INTERVAL_MIN=12
 # CONFIG_PMW3610_ALT_LOG_LEVEL_DBG=y
 # CONFIG_PMW3610_ALT_INIT_POWER_UP_EXTRA_DELAY_MS=300 // <--see Troubleshooting
 ```
