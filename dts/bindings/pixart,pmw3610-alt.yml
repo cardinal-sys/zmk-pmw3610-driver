@@ -84,11 +84,6 @@ properties:
       2ストローク目の入力待ちタイムアウト(ms)。
       この時間内に2ストローク目が来なければリセット。Default 1000ms。
 
-    type: int
-    default: 10
-    description: |
-      Accumulated delta before emitting one arrow key event.
-      Smaller value = more sensitive. Range 1-255. Default 10.
   arrows-tick:
     type: int
     default: 10
