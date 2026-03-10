@@ -46,14 +46,44 @@ properties:
       Driver divides cursor movement by CONFIG_PMW3610_ALT_SNIPE_CPI_DIVIDOR,
       with remainder carry-over for lossless precision.
       Example: snipe-layers = <15>;
-  arrows-layers:
+  arrows-profiles:
     type: array
     description: |
-      Layer numbers that activate arrows mode.
-      Trackball movement is converted to arrow key presses (up/down/left/right).
-      Whichever axis has larger displacement wins; diagonal input is suppressed.
-      Example: arrows-layers = <3>;
-  arrows-tick:
+      レイヤーごとのキーマッピング。
+      5個ずつのセットで記述: [layer, key_up, key_down, key_left, key_right]
+      複数レイヤーを並べて書ける。
+
+      Linux keycode早見表:
+        矢印キー  UP=103 DOWN=108 LEFT=105 RIGHT=106
+        PageUp/Down    104 / 109
+        Home / End     102 / 107
+        Enter          28
+        Tab            15
+        Escape         1
+
+      例:
+        arrows-profiles = <
+            3   103 108 105 106   /* layer 3: 矢印キー */
+            4   104 109 102 107   /* layer 4: PageUp/Down Home/End */
+        >;
+  numpad-layers:
+    type: array
+    description: |
+      Layer numbers that activate numpad 2-stroke input mode.
+      Example: numpad-layers = <2>;
+  numpad-tick:
+    type: int
+    default: 15
+    description: |
+      Stroke detection threshold (raw delta). Default 15.
+      小さいほど敏感、大きいほど大きく動かさないと反応しない。
+  numpad-timeout-ms:
+    type: int
+    default: 1000
+    description: |
+      2ストローク目の入力待ちタイムアウト(ms)。
+      この時間内に2ストローク目が来なければリセット。Default 1000ms。
+
     type: int
     default: 10
     description: |
