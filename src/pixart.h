@@ -34,6 +34,11 @@ struct pixart_data {
     int32_t                      arrows_dx;
     int32_t                      arrows_dy;
 
+    /* inertia scroll: velocity in fixed-point (*256) */
+    int32_t                      inertia_vx;
+    int32_t                      inertia_vy;
+    struct k_work_delayable      inertia_work;
+
     /* 2-sample accumulation (POLLING_RATE_125_SW equivalent) */
     int64_t                      last_poll_time;
     int16_t                      last_x;
@@ -59,6 +64,9 @@ struct pixart_config {
     const uint8_t *arrows_layers;
     size_t arrows_layers_len;
     int arrows_tick;
+    bool scroll_inertia;
+    int  scroll_inertia_decay;  /* 0-99: velocity kept per tick (e.g. 85 → 85%) */
+    int  scroll_inertia_tick_ms; /* timer interval in ms (default 16) */
 };
 
 #ifdef __cplusplus

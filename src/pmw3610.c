@@ -350,6 +350,40 @@ static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
     input_report(dev, INPUT_EV_KEY, key, 0, true, K_FOREVER);
 }
 
+//////// Inertia scroll ////////
+
+static void pmw3610_inertia_work_handler(struct k_work *work) {
+    struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
+    struct pixart_data *data = CONTAINER_OF(dwork, struct pixart_data, inertia_work);
+    const struct device *dev = data->dev;
+    const struct pixart_config *config = dev->config;
+
+    /* Apply decay: velocity *= decay% / 100 */
+    data->inertia_vx = data->inertia_vx * config->scroll_inertia_decay / 100;
+    data->inertia_vy = data->inertia_vy * config->scroll_inertia_decay / 100;
+
+    int16_t vx = (int16_t)(data->inertia_vx / 256);
+    int16_t vy = (int16_t)(data->inertia_vy / 256);
+    bool emitted = false;
+
+    if (vx != 0) {
+        input_report_rel(dev, INPUT_REL_HWHEEL, vx, false, K_FOREVER);
+        emitted = true;
+    }
+    if (vy != 0) {
+        input_report_rel(dev, INPUT_REL_WHEEL, vy, false, K_FOREVER);
+        emitted = true;
+    }
+    if (emitted) {
+        input_report_rel(dev, INPUT_REL_WHEEL, 0, true, K_FOREVER);
+    }
+
+    /* Reschedule while velocity is still meaningful */
+    if (abs(data->inertia_vx) >= 256 || abs(data->inertia_vy) >= 256) {
+        k_work_schedule(&data->inertia_work, K_MSEC(config->scroll_inertia_tick_ms));
+    }
+}
+
 //////// Report data ////////
 
 static int pmw3610_report_data(const struct device *dev) {
@@ -396,6 +430,11 @@ static int pmw3610_report_data(const struct device *dev) {
      * SCROLL LAYER: emit WHEEL/HWHEEL instead of REL_X/Y
      * ====================================================== */
     if (pmw3610_layer_match(config->scroll_layers, config->scroll_layers_len)) {
+        /* Cancel any ongoing inertia - user is scrolling again */
+        if (config->scroll_inertia) {
+            k_work_cancel_delayable(&data->inertia_work);
+        }
+
         data->scroll_dx += x;
         data->scroll_dy += y;
         data->snipe_dx = 0;
@@ -407,9 +446,11 @@ static int pmw3610_report_data(const struct device *dev) {
         data->last_y = 0;
 
         bool scrolled = false;
+        int16_t hwheel = 0;
+        int16_t wheel  = 0;
 
         if (abs(data->scroll_dx) >= CONFIG_PMW3610_ALT_SCROLL_TICK) {
-            int16_t hwheel = (int16_t)(data->scroll_dx / CONFIG_PMW3610_ALT_SCROLL_TICK);
+            hwheel = (int16_t)(data->scroll_dx / CONFIG_PMW3610_ALT_SCROLL_TICK);
 #if IS_ENABLED(CONFIG_PMW3610_ALT_INVERT_SCROLL_X)
             hwheel = -hwheel;
 #endif
@@ -419,7 +460,7 @@ static int pmw3610_report_data(const struct device *dev) {
         }
 
         if (abs(data->scroll_dy) >= CONFIG_PMW3610_ALT_SCROLL_TICK) {
-            int16_t wheel = (int16_t)(data->scroll_dy / CONFIG_PMW3610_ALT_SCROLL_TICK);
+            wheel = (int16_t)(data->scroll_dy / CONFIG_PMW3610_ALT_SCROLL_TICK);
 #if IS_ENABLED(CONFIG_PMW3610_ALT_INVERT_SCROLL_Y)
             wheel = -wheel;
 #endif
@@ -431,6 +472,16 @@ static int pmw3610_report_data(const struct device *dev) {
         if (scrolled) {
             /* sync event */
             input_report_rel(dev, INPUT_REL_WHEEL, 0, true, K_FOREVER);
+
+            if (config->scroll_inertia) {
+                /* Accumulate velocity (fixed-point *256).
+                 * Add to existing to let fast flicks build up more momentum. */
+                data->inertia_vx += (int32_t)hwheel * 256;
+                data->inertia_vy += (int32_t)wheel  * 256;
+                /* Schedule inertia tick shortly after last movement */
+                k_work_schedule(&data->inertia_work,
+                                K_MSEC(config->scroll_inertia_tick_ms * 2));
+            }
         }
         return 0;
     }
@@ -600,11 +651,14 @@ static int pmw3610_init(const struct device *dev) {
     data->snipe_dy     = 0;
     data->arrows_dx    = 0;
     data->arrows_dy    = 0;
+    data->inertia_vx   = 0;
+    data->inertia_vy   = 0;
     data->last_poll_time = 0;
     data->last_x       = 0;
     data->last_y       = 0;
 
     k_work_init(&data->trigger_work, pmw3610_work_callback);
+    k_work_init_delayable(&data->inertia_work, pmw3610_inertia_work_handler);
 
     err = pmw3610_init_irq(dev);
     if (err) {
@@ -706,6 +760,9 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .arrows_layers = PMW3610_LAYERS_PTR(n, arrows_layers),                     \
         .arrows_layers_len = PMW3610_LAYERS_LEN(n, arrows_layers),                 \
         .arrows_tick = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),               \
+        .scroll_inertia = DT_PROP(DT_DRV_INST(n), scroll_inertia),                 \
+        .scroll_inertia_decay = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_decay, 85), \
+        .scroll_inertia_tick_ms = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_tick_ms, 16), \
     };                                                                              \
     DEVICE_DT_INST_DEFINE(n, pmw3610_init, NULL, &data##n, &config##n,             \
                           POST_KERNEL, CONFIG_INPUT_PMW3610_INIT_PRIORITY,          \
