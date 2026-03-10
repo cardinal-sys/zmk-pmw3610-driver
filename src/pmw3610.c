@@ -66,6 +66,22 @@ static bool pmw3610_layer_match(const uint8_t *layers, size_t len) {
     return false;
 }
 
+/* arrows_profiles: flat array of uint16 groups [layer, up, down, left, right]
+ * Returns pointer to the matching group (5 elements), or NULL if no match. */
+static const uint16_t *pmw3610_arrows_profile_match(const struct pixart_config *config) {
+    if (config->arrows_profiles == NULL || config->arrows_profiles_count == 0) {
+        return NULL;
+    }
+    uint16_t active = (uint16_t)zmk_keymap_highest_layer_active();
+    for (size_t i = 0; i < config->arrows_profiles_count; i++) {
+        const uint16_t *p = &config->arrows_profiles[i * 5];
+        if (p[0] == active) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
 //////// SPI helpers ////////
 
 static int pmw3610_read(const struct device *dev, uint8_t addr, uint8_t *value, uint8_t len) {
@@ -351,6 +367,108 @@ static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
     input_report(dev, INPUT_EV_KEY, key, 0, true, K_FOREVER);
 }
 
+//////// Numpad 2-stroke input ////////
+
+/*
+ * 1st stroke:  上→group 0 (1-3)  左→group 1 (4-6)  右→group 2 (7-9)  下→0確定
+ * 2nd stroke:  左→col 0  上→col 1  右→col 2
+ *
+ * Linux keycode: 1=2, 2=3, 3=4, 4=5, 5=6, 6=7, 7=8, 8=9, 9=10, 0=11
+ */
+static const uint16_t numpad_keys[3][3] = {
+    {2, 3, 4},    /* group 0 (上): 1, 2, 3 */
+    {5, 6, 7},    /* group 1 (左): 4, 5, 6 */
+    {8, 9, 10},   /* group 2 (右): 7, 8, 9 */
+};
+#define NUMPAD_KEY_0 11
+
+static void pmw3610_numpad_send(const struct device *dev, uint16_t keycode) {
+    input_report(dev, INPUT_EV_KEY, keycode, 1, false, K_FOREVER);
+    k_sleep(K_MSEC(10));
+    input_report(dev, INPUT_EV_KEY, keycode, 0, true, K_FOREVER);
+    LOG_DBG("numpad key=%d", keycode);
+}
+
+static void pmw3610_numpad_reset(struct pixart_data *data) {
+    data->numpad_state = 0;
+    data->numpad_group = 0;
+    data->numpad_dx    = 0;
+    data->numpad_dy    = 0;
+    k_work_cancel_delayable(&data->numpad_timeout_work);
+}
+
+static void pmw3610_numpad_timeout_handler(struct k_work *work) {
+    struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
+    struct pixart_data *data = CONTAINER_OF(dwork, struct pixart_data, numpad_timeout_work);
+    LOG_DBG("numpad timeout: reset");
+    pmw3610_numpad_reset(data);
+}
+
+static int pmw3610_numpad_process(const struct device *dev, int16_t x, int16_t y) {
+    struct pixart_data *data = dev->data;
+    const struct pixart_config *config = dev->config;
+    int tick = config->numpad_tick;
+
+    data->numpad_dx += x;
+    data->numpad_dy += y;
+
+    /* stroke検出: どちらかの軸がtickを超えたら方向確定 */
+    if (abs(data->numpad_dx) < tick && abs(data->numpad_dy) < tick) {
+        return 0;
+    }
+
+    /* 主軸を判定 */
+    bool horiz = abs(data->numpad_dx) >= abs(data->numpad_dy);
+    int dir; /* 0=上 1=下 2=左 3=右 */
+    if (horiz) {
+        dir = data->numpad_dx > 0 ? 3 : 2;
+    } else {
+        dir = data->numpad_dy > 0 ? 1 : 0;
+    }
+
+    /* アキュムレータをリセット */
+    data->numpad_dx = 0;
+    data->numpad_dy = 0;
+
+    if (data->numpad_state == 0) {
+        /* 1ストローク目 */
+        if (dir == 1) {
+            /* 下 → 0を即確定 */
+            pmw3610_numpad_send(dev, NUMPAD_KEY_0);
+        } else if (dir == 0) {
+            /* 上 → group 0 (1-3) */
+            data->numpad_group = 0;
+            data->numpad_state = 1;
+            k_work_schedule(&data->numpad_timeout_work,
+                            K_MSEC(config->numpad_timeout_ms));
+        } else if (dir == 2) {
+            /* 左 → group 1 (4-6) */
+            data->numpad_group = 1;
+            data->numpad_state = 1;
+            k_work_schedule(&data->numpad_timeout_work,
+                            K_MSEC(config->numpad_timeout_ms));
+        } else {
+            /* 右 → group 2 (7-9) */
+            data->numpad_group = 2;
+            data->numpad_state = 1;
+            k_work_schedule(&data->numpad_timeout_work,
+                            K_MSEC(config->numpad_timeout_ms));
+        }
+    } else {
+        /* 2ストローク目: 左=col0 上=col1 右=col2 */
+        int col = -1;
+        if (dir == 2)      col = 0;  /* 左 */
+        else if (dir == 0) col = 1;  /* 上 */
+        else if (dir == 3) col = 2;  /* 右 */
+
+        if (col >= 0) {
+            pmw3610_numpad_send(dev, numpad_keys[data->numpad_group][col]);
+        }
+        pmw3610_numpad_reset(data);
+    }
+    return 0;
+}
+
 //////// Inertia scroll ////////
 
 /* Compute decay% for current speed using 2-point linear interpolation.
@@ -578,9 +696,17 @@ static int pmw3610_report_data(const struct device *dev) {
 
     /* ======================================================
      * ARROWS LAYER: convert movement to arrow key presses
-     * Features: diagonal input, acceleration, auto-repeat
+     * Features: per-layer key mapping, diagonal, accel, auto-repeat
+     * Profile layout: [layer, key_up, key_down, key_left, key_right]
      * ====================================================== */
-    if (pmw3610_layer_match(config->arrows_layers, config->arrows_layers_len)) {
+    const uint16_t *profile = pmw3610_arrows_profile_match(config);
+    if (profile != NULL) {
+        /* profile[0]=layer, [1]=up, [2]=down, [3]=left, [4]=right */
+        uint16_t key_up    = profile[1];
+        uint16_t key_down  = profile[2];
+        uint16_t key_left  = profile[3];
+        uint16_t key_right = profile[4];
+
         data->scroll_dx = 0;
         data->scroll_dy = 0;
         data->snipe_dx  = 0;
@@ -597,7 +723,6 @@ static int pmw3610_report_data(const struct device *dev) {
         if (config->arrows_accel) {
             int mag = MAX(abs(x), abs(y));
             if (mag >= config->arrows_accel_threshold) {
-                /* divisor scales from 1 up to arrows_accel_max_div */
                 int div = 1 + (mag - config->arrows_accel_threshold) *
                               (config->arrows_accel_max_div - 1) /
                               config->arrows_accel_threshold;
@@ -608,23 +733,22 @@ static int pmw3610_report_data(const struct device *dev) {
 
         bool fired_x = false;
         bool fired_y = false;
-        uint16_t key_x = 0;
-        uint16_t key_y = 0;
+        uint16_t emit_x = 0;
+        uint16_t emit_y = 0;
 
         if (abs(data->arrows_dx) >= tick) {
-            key_x = data->arrows_dx > 0 ? ARROWS_KEY_RIGHT : ARROWS_KEY_LEFT;
+            emit_x = data->arrows_dx > 0 ? key_right : key_left;
             data->arrows_dx = 0;
             fired_x = true;
         }
         if (abs(data->arrows_dy) >= tick) {
-            key_y = data->arrows_dy > 0 ? ARROWS_KEY_DOWN : ARROWS_KEY_UP;
+            emit_y = data->arrows_dy > 0 ? key_down : key_up;
             data->arrows_dy = 0;
             fired_y = true;
         }
 
         /* Diagonal suppression unless arrows-diagonal is enabled */
         if (!config->arrows_diagonal && fired_x && fired_y) {
-            /* fall back: dominant axis wins */
             if (abs(x) >= abs(y)) {
                 fired_y = false;
             } else {
@@ -634,18 +758,17 @@ static int pmw3610_report_data(const struct device *dev) {
 
         uint16_t primary_key = 0;
         if (fired_x) {
-            pmw3610_send_arrow_key(dev, key_x);
-            primary_key = key_x;
+            pmw3610_send_arrow_key(dev, emit_x);
+            primary_key = emit_x;
         }
         if (fired_y) {
-            pmw3610_send_arrow_key(dev, key_y);
-            if (!primary_key) primary_key = key_y;
+            pmw3610_send_arrow_key(dev, emit_y);
+            if (!primary_key) primary_key = emit_y;
         }
 
         /* Auto-repeat: track held direction */
         if (config->arrows_repeat_delay_ms > 0 && primary_key != 0) {
             if (primary_key != data->arrows_last_key) {
-                /* Direction changed — reset repeat */
                 k_work_cancel_delayable(&data->arrows_repeat_work);
                 data->arrows_repeating  = false;
                 data->arrows_last_key   = primary_key;
@@ -655,13 +778,30 @@ static int pmw3610_report_data(const struct device *dev) {
                 data->arrows_repeating = true;
             }
         } else if (primary_key == 0 && data->arrows_last_key != 0) {
-            /* No fire this cycle — cancel repeat after a short idle */
             data->arrows_last_key  = 0;
             data->arrows_repeating = false;
             k_work_cancel_delayable(&data->arrows_repeat_work);
         }
 
         return 0;
+    }
+
+    /* ======================================================
+     * NUMPAD LAYER: 2-stroke number input (0-9)
+     * 1st stroke: 上=1-3グループ 左=4-6グループ 右=7-9グループ 下=0
+     * 2nd stroke: 左=1/4/7  上=2/5/8  右=3/6/9
+     * ====================================================== */
+    if (pmw3610_layer_match(config->numpad_layers, config->numpad_layers_len)) {
+        data->scroll_dx = 0;
+        data->scroll_dy = 0;
+        data->snipe_dx  = 0;
+        data->snipe_dy  = 0;
+        data->arrows_dx = 0;
+        data->arrows_dy = 0;
+        data->last_poll_time = 0;
+        data->last_x = 0;
+        data->last_y = 0;
+        return pmw3610_numpad_process(dev, x, y);
     }
 
     /* ======================================================
@@ -761,6 +901,10 @@ static int pmw3610_init(const struct device *dev) {
     data->arrows_dy    = 0;
     data->arrows_last_key  = 0;
     data->arrows_repeating = false;
+    data->numpad_dx    = 0;
+    data->numpad_dy    = 0;
+    data->numpad_state = 0;
+    data->numpad_group = 0;
     data->inertia_vx   = 0;
     data->inertia_vy   = 0;
     data->flick_idx    = 0;
@@ -773,6 +917,7 @@ static int pmw3610_init(const struct device *dev) {
     k_work_init(&data->trigger_work, pmw3610_work_callback);
     k_work_init_delayable(&data->inertia_work, pmw3610_inertia_work_handler);
     k_work_init_delayable(&data->arrows_repeat_work, pmw3610_arrows_repeat_handler);
+    k_work_init_delayable(&data->numpad_timeout_work, pmw3610_numpad_timeout_handler);
 
     err = pmw3610_init_irq(dev);
     if (err) {
@@ -853,7 +998,10 @@ static const struct sensor_driver_api pmw3610_driver_api = {
 #define PMW3610_DEFINE(n)                                                           \
     PMW3610_LAYERS_DEFINE(n, scroll_layers)                                         \
     PMW3610_LAYERS_DEFINE(n, snipe_layers)                                          \
-    PMW3610_LAYERS_DEFINE(n, arrows_layers)                                         \
+    PMW3610_LAYERS_DEFINE(n, numpad_layers)                                         \
+    COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles),                         \
+        (static const uint16_t arrows_profiles_##n[] = DT_INST_PROP(n, arrows_profiles);), \
+        ())                                                                         \
     static struct pixart_data data##n;                                              \
     static const struct pixart_config config##n = {                                 \
         .spi = SPI_DT_SPEC_INST_GET(n, PMW3610_SPI_MODE, 0),                       \
@@ -871,8 +1019,14 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .scroll_layers_len = PMW3610_LAYERS_LEN(n, scroll_layers),                 \
         .snipe_layers = PMW3610_LAYERS_PTR(n, snipe_layers),                       \
         .snipe_layers_len = PMW3610_LAYERS_LEN(n, snipe_layers),                   \
-        .arrows_layers = PMW3610_LAYERS_PTR(n, arrows_layers),                     \
-        .arrows_layers_len = PMW3610_LAYERS_LEN(n, arrows_layers),                 \
+        .numpad_layers = PMW3610_LAYERS_PTR(n, numpad_layers),                     \
+        .numpad_layers_len = PMW3610_LAYERS_LEN(n, numpad_layers),                 \
+        .numpad_tick = DT_PROP_OR(DT_DRV_INST(n), numpad_tick, 15),               \
+        .numpad_timeout_ms = DT_PROP_OR(DT_DRV_INST(n), numpad_timeout_ms, 1000), \
+        .arrows_profiles = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles),  \
+            (arrows_profiles_##n), (NULL)),                                         \
+        .arrows_profiles_count = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles), \
+            (DT_INST_PROP_LEN(n, arrows_profiles) / 5), (0)),                      \
         .arrows_tick             = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),             \
         .arrows_diagonal         = DT_PROP(DT_DRV_INST(n), arrows_diagonal),                 \
         .arrows_accel            = DT_PROP(DT_DRV_INST(n), arrows_accel),                    \

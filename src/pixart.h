@@ -53,6 +53,13 @@ struct pixart_data {
     int64_t                      last_poll_time;
     int16_t                      last_x;
     int16_t                      last_y;
+
+    /* numpad 2-stroke input state */
+    int32_t                      numpad_dx;
+    int32_t                      numpad_dy;
+    uint8_t                      numpad_state;  /* 0=idle, 1=waiting 2nd stroke */
+    uint8_t                      numpad_group;  /* 0=up(1-3) 1=left(4-6) 2=right(7-9) */
+    struct k_work_delayable      numpad_timeout_work;
 };
 
 struct pixart_config {
@@ -71,8 +78,9 @@ struct pixart_config {
     size_t scroll_layers_len;
     const uint8_t *snipe_layers;
     size_t snipe_layers_len;
-    const uint8_t *arrows_layers;
-    size_t arrows_layers_len;
+    /* arrows profiles: flat array of [layer, key_up, key_down, key_left, key_right, ...] */
+    const uint16_t *arrows_profiles;
+    size_t arrows_profiles_count;  /* number of profiles (array_len / 5) */
     int arrows_tick;
     bool arrows_diagonal;         /* fire both axes on diagonal input */
     bool arrows_accel;            /* reduce tick as speed increases */
@@ -88,6 +96,10 @@ struct pixart_config {
     int  scroll_inertia_tick_ms;
     int  scroll_flick_threshold;     /* avg raw delta/sample to detect flick (default 6) */
     int  scroll_flick_boost;         /* velocity multiplier *256 on flick (default 512=2x) */
+    const uint8_t *numpad_layers;
+    size_t numpad_layers_len;
+    int  numpad_tick;          /* stroke threshold (default 15) */
+    int  numpad_timeout_ms;    /* 2nd stroke timeout ms (default 1000) */
 };
 
 #ifdef __cplusplus
