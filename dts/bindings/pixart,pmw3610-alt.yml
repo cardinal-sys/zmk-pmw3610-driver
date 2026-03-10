@@ -58,8 +58,38 @@ properties:
     default: 10
     description: |
       Accumulated delta before emitting one arrow key event.
-      Smaller value = more sensitive (fires more frequently).
-      Range: 1 - 255. Default: 10.
+      Smaller value = more sensitive. Range 1-255. Default 10.
+  arrows-diagonal:
+    type: boolean
+    description: |
+      Allow diagonal arrow key output. When enabled, both X and Y axes can
+      fire simultaneously. Default off (dominant axis only).
+  arrows-accel:
+    type: boolean
+    description: |
+      Enable acceleration: faster trackball movement reduces the effective
+      tick, causing more rapid key firing.
+  arrows-accel-max-div:
+    type: int
+    default: 4
+    description: |
+      Maximum divisor applied to tick at high speed. Default 4 (tick/4 at peak).
+  arrows-accel-threshold:
+    type: int
+    default: 20
+    description: |
+      Raw delta magnitude at which max acceleration is reached. Default 20.
+  arrows-repeat-delay-ms:
+    type: int
+    default: 300
+    description: |
+      Delay before auto-repeat starts when holding a direction (ms).
+      Set to 0 to disable auto-repeat. Default 300.
+  arrows-repeat-rate-ms:
+    type: int
+    default: 50
+    description: |
+      Interval between auto-repeat key events (ms). Default 50.
   scroll-inertia:
     type: boolean
     description: Enable inertia (momentum) scrolling.
