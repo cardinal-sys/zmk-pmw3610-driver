@@ -370,17 +370,20 @@ static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
 //////// Numpad 2-stroke input ////////
 
 /*
- * 1st stroke:  上→group 0 (1-3)  左→group 1 (4-6)  右→group 2 (7-9)  下→0確定
- * 2nd stroke:  左→col 0  上→col 1  右→col 2
+ * 1st stroke:  上→group 0 (1-3)  左→group 1 (4-6)  右→group 2 (7-9)  下→group 3
+ * 2nd stroke (group 0-2):  左→col 0  上→col 1  右→col 2
+ * 2nd stroke (group 3/下):  下→0  上→.  左→Enter  右→Backspace
  *
  * Linux keycode: 1=2, 2=3, 3=4, 4=5, 5=6, 6=7, 7=8, 8=9, 9=10, 0=11
+ *                Enter=28, Backspace=14, .=52
  */
 static const uint16_t numpad_keys[3][3] = {
     {2, 3, 4},    /* group 0 (上): 1, 2, 3 */
     {5, 6, 7},    /* group 1 (左): 4, 5, 6 */
     {8, 9, 10},   /* group 2 (右): 7, 8, 9 */
 };
-#define NUMPAD_KEY_0 11
+/* group 3 (下): [下, 上, 左, 右] */
+static const uint16_t numpad_down_keys[4] = {11, 52, 14, 28}; /* 0, ., BS, Enter */
 
 static void pmw3610_numpad_send(const struct device *dev, uint16_t keycode) {
     input_report(dev, INPUT_EV_KEY, keycode, 1, false, K_FOREVER);
@@ -431,38 +434,35 @@ static int pmw3610_numpad_process(const struct device *dev, int16_t x, int16_t y
     data->numpad_dy = 0;
 
     if (data->numpad_state == 0) {
-        /* 1ストローク目 */
-        if (dir == 1) {
-            /* 下 → 0を即確定 */
-            pmw3610_numpad_send(dev, NUMPAD_KEY_0);
-        } else if (dir == 0) {
-            /* 上 → group 0 (1-3) */
-            data->numpad_group = 0;
-            data->numpad_state = 1;
-            k_work_schedule(&data->numpad_timeout_work,
-                            K_MSEC(config->numpad_timeout_ms));
-        } else if (dir == 2) {
-            /* 左 → group 1 (4-6) */
-            data->numpad_group = 1;
-            data->numpad_state = 1;
-            k_work_schedule(&data->numpad_timeout_work,
-                            K_MSEC(config->numpad_timeout_ms));
-        } else {
-            /* 右 → group 2 (7-9) */
-            data->numpad_group = 2;
-            data->numpad_state = 1;
-            k_work_schedule(&data->numpad_timeout_work,
-                            K_MSEC(config->numpad_timeout_ms));
-        }
+        /* 1ストローク目: 全方向でgroup決定→2ストローク待ち */
+        if (dir == 0)      data->numpad_group = 0;  /* 上: 1-3 */
+        else if (dir == 2) data->numpad_group = 1;  /* 左: 4-6 */
+        else if (dir == 3) data->numpad_group = 2;  /* 右: 7-9 */
+        else               data->numpad_group = 3;  /* 下: 0/./Enter/BS */
+        data->numpad_state = 1;
+        k_work_schedule(&data->numpad_timeout_work,
+                        K_MSEC(config->numpad_timeout_ms));
     } else {
-        /* 2ストローク目: 左=col0 上=col1 右=col2 */
-        int col = -1;
-        if (dir == 2)      col = 0;  /* 左 */
-        else if (dir == 0) col = 1;  /* 上 */
-        else if (dir == 3) col = 2;  /* 右 */
-
-        if (col >= 0) {
-            pmw3610_numpad_send(dev, numpad_keys[data->numpad_group][col]);
+        /* 2ストローク目 */
+        if (data->numpad_group <= 2) {
+            /* group 0-2: 左=col0 上=col1 右=col2 */
+            int col = -1;
+            if (dir == 2)      col = 0;  /* 左 */
+            else if (dir == 0) col = 1;  /* 上 */
+            else if (dir == 3) col = 2;  /* 右 */
+            if (col >= 0) {
+                pmw3610_numpad_send(dev, numpad_keys[data->numpad_group][col]);
+            }
+        } else {
+            /* group 3 (下): 下=0 上=. 左=Enter 右=BS */
+            int idx = -1;
+            if (dir == 1)      idx = 0;  /* 下: 0 */
+            else if (dir == 0) idx = 1;  /* 上: . */
+            else if (dir == 2) idx = 2;  /* 左: Enter */
+            else if (dir == 3) idx = 3;  /* 右: Backspace */
+            if (idx >= 0) {
+                pmw3610_numpad_send(dev, numpad_down_keys[idx]);
+            }
         }
         pmw3610_numpad_reset(data);
     }
