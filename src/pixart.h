@@ -34,6 +34,11 @@ struct pixart_data {
     int32_t                      arrows_dx;
     int32_t                      arrows_dy;
 
+    /* arrows auto-repeat */
+    uint16_t                     arrows_last_key;
+    bool                         arrows_repeating;
+    struct k_work_delayable      arrows_repeat_work;
+
     /* inertia scroll: velocity in fixed-point (*256) */
     int32_t                      inertia_vx;
     int32_t                      inertia_vy;
@@ -69,6 +74,12 @@ struct pixart_config {
     const uint8_t *arrows_layers;
     size_t arrows_layers_len;
     int arrows_tick;
+    bool arrows_diagonal;         /* fire both axes on diagonal input */
+    bool arrows_accel;            /* reduce tick as speed increases */
+    int  arrows_accel_max_div;    /* max divisor for tick at high speed (default 4) */
+    int  arrows_accel_threshold;  /* raw delta to start accel (default 20) */
+    int  arrows_repeat_delay_ms;  /* initial auto-repeat delay ms (0=off, default 300) */
+    int  arrows_repeat_rate_ms;   /* auto-repeat interval ms (default 50) */
     bool scroll_inertia;
     int  scroll_inertia_decay;       /* slow-speed decay % (default 75) */
     int  scroll_inertia_decay_fast;  /* high-speed decay % (default 92) */

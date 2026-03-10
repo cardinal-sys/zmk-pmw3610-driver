@@ -406,6 +406,22 @@ static void pmw3610_inertia_work_handler(struct k_work *work) {
     }
 }
 
+//////// Arrows auto-repeat ////////
+
+static void pmw3610_arrows_repeat_handler(struct k_work *work) {
+    struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
+    struct pixart_data *data = CONTAINER_OF(dwork, struct pixart_data, arrows_repeat_work);
+    const struct device *dev = data->dev;
+    const struct pixart_config *config = dev->config;
+
+    if (!data->arrows_repeating || data->arrows_last_key == 0) {
+        return;
+    }
+
+    pmw3610_send_arrow_key(dev, data->arrows_last_key);
+    k_work_schedule(&data->arrows_repeat_work, K_MSEC(config->arrows_repeat_rate_ms));
+}
+
 //////// Report data ////////
 
 static int pmw3610_report_data(const struct device *dev) {
@@ -562,8 +578,7 @@ static int pmw3610_report_data(const struct device *dev) {
 
     /* ======================================================
      * ARROWS LAYER: convert movement to arrow key presses
-     * Whichever axis has larger displacement wins.
-     * Diagonal input is suppressed.
+     * Features: diagonal input, acceleration, auto-repeat
      * ====================================================== */
     if (pmw3610_layer_match(config->arrows_layers, config->arrows_layers_len)) {
         data->scroll_dx = 0;
@@ -577,24 +592,75 @@ static int pmw3610_report_data(const struct device *dev) {
         data->arrows_dx += x;
         data->arrows_dy += y;
 
+        /* Acceleration: reduce effective tick based on raw input magnitude */
         int tick = config->arrows_tick;
-
-        if (abs(data->arrows_dx) >= tick || abs(data->arrows_dy) >= tick) {
-            uint32_t keycode;
-            if (abs(data->arrows_dx) >= abs(data->arrows_dy)) {
-                keycode = data->arrows_dx > 0
-                    ? ARROWS_KEY_RIGHT
-                    : ARROWS_KEY_LEFT;
-            } else {
-                keycode = data->arrows_dy > 0
-                    ? ARROWS_KEY_DOWN
-                    : ARROWS_KEY_UP;
+        if (config->arrows_accel) {
+            int mag = MAX(abs(x), abs(y));
+            if (mag >= config->arrows_accel_threshold) {
+                /* divisor scales from 1 up to arrows_accel_max_div */
+                int div = 1 + (mag - config->arrows_accel_threshold) *
+                              (config->arrows_accel_max_div - 1) /
+                              config->arrows_accel_threshold;
+                div = MIN(div, config->arrows_accel_max_div);
+                tick = MAX(1, tick / div);
             }
-            data->arrows_dx = 0;
-            data->arrows_dy = 0;
-
-            pmw3610_send_arrow_key(dev, (uint16_t)keycode);
         }
+
+        bool fired_x = false;
+        bool fired_y = false;
+        uint16_t key_x = 0;
+        uint16_t key_y = 0;
+
+        if (abs(data->arrows_dx) >= tick) {
+            key_x = data->arrows_dx > 0 ? ARROWS_KEY_RIGHT : ARROWS_KEY_LEFT;
+            data->arrows_dx = 0;
+            fired_x = true;
+        }
+        if (abs(data->arrows_dy) >= tick) {
+            key_y = data->arrows_dy > 0 ? ARROWS_KEY_DOWN : ARROWS_KEY_UP;
+            data->arrows_dy = 0;
+            fired_y = true;
+        }
+
+        /* Diagonal suppression unless arrows-diagonal is enabled */
+        if (!config->arrows_diagonal && fired_x && fired_y) {
+            /* fall back: dominant axis wins */
+            if (abs(x) >= abs(y)) {
+                fired_y = false;
+            } else {
+                fired_x = false;
+            }
+        }
+
+        uint16_t primary_key = 0;
+        if (fired_x) {
+            pmw3610_send_arrow_key(dev, key_x);
+            primary_key = key_x;
+        }
+        if (fired_y) {
+            pmw3610_send_arrow_key(dev, key_y);
+            if (!primary_key) primary_key = key_y;
+        }
+
+        /* Auto-repeat: track held direction */
+        if (config->arrows_repeat_delay_ms > 0 && primary_key != 0) {
+            if (primary_key != data->arrows_last_key) {
+                /* Direction changed — reset repeat */
+                k_work_cancel_delayable(&data->arrows_repeat_work);
+                data->arrows_repeating  = false;
+                data->arrows_last_key   = primary_key;
+                k_work_schedule(&data->arrows_repeat_work,
+                                K_MSEC(config->arrows_repeat_delay_ms));
+            } else if (!data->arrows_repeating) {
+                data->arrows_repeating = true;
+            }
+        } else if (primary_key == 0 && data->arrows_last_key != 0) {
+            /* No fire this cycle — cancel repeat after a short idle */
+            data->arrows_last_key  = 0;
+            data->arrows_repeating = false;
+            k_work_cancel_delayable(&data->arrows_repeat_work);
+        }
+
         return 0;
     }
 
@@ -693,6 +759,8 @@ static int pmw3610_init(const struct device *dev) {
     data->snipe_dy     = 0;
     data->arrows_dx    = 0;
     data->arrows_dy    = 0;
+    data->arrows_last_key  = 0;
+    data->arrows_repeating = false;
     data->inertia_vx   = 0;
     data->inertia_vy   = 0;
     data->flick_idx    = 0;
@@ -704,6 +772,7 @@ static int pmw3610_init(const struct device *dev) {
 
     k_work_init(&data->trigger_work, pmw3610_work_callback);
     k_work_init_delayable(&data->inertia_work, pmw3610_inertia_work_handler);
+    k_work_init_delayable(&data->arrows_repeat_work, pmw3610_arrows_repeat_handler);
 
     err = pmw3610_init_irq(dev);
     if (err) {
@@ -804,7 +873,13 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .snipe_layers_len = PMW3610_LAYERS_LEN(n, snipe_layers),                   \
         .arrows_layers = PMW3610_LAYERS_PTR(n, arrows_layers),                     \
         .arrows_layers_len = PMW3610_LAYERS_LEN(n, arrows_layers),                 \
-        .arrows_tick = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),               \
+        .arrows_tick             = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),             \
+        .arrows_diagonal         = DT_PROP(DT_DRV_INST(n), arrows_diagonal),                 \
+        .arrows_accel            = DT_PROP(DT_DRV_INST(n), arrows_accel),                    \
+        .arrows_accel_max_div    = DT_PROP_OR(DT_DRV_INST(n), arrows_accel_max_div, 4),      \
+        .arrows_accel_threshold  = DT_PROP_OR(DT_DRV_INST(n), arrows_accel_threshold, 20),  \
+        .arrows_repeat_delay_ms  = DT_PROP_OR(DT_DRV_INST(n), arrows_repeat_delay_ms, 300), \
+        .arrows_repeat_rate_ms   = DT_PROP_OR(DT_DRV_INST(n), arrows_repeat_rate_ms, 50),   \
         .scroll_inertia = DT_PROP(DT_DRV_INST(n), scroll_inertia),                        \
         .scroll_inertia_decay      = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_decay, 75),    \
         .scroll_inertia_decay_fast = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_decay_fast, 92), \
