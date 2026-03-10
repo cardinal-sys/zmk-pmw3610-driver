@@ -13,8 +13,15 @@
 #include <zmk/keymap.h>
 #include <zmk/events/activity_state_changed.h>
 #include <zmk/events/keycode_state_changed.h>
-#include <zmk/hid_usage.h>
-#include <zmk/hid_usage_pages.h>
+
+/* HID Usage Page: Keyboard/Keypad (0x07) */
+#define HID_USAGE_KEY 0x07
+
+/* HID Usage IDs for arrow keys */
+#define HID_USAGE_KEY_KEYBOARD_RIGHT_ARROW 0x4F
+#define HID_USAGE_KEY_KEYBOARD_LEFT_ARROW  0x50
+#define HID_USAGE_KEY_KEYBOARD_DOWN_ARROW  0x51
+#define HID_USAGE_KEY_KEYBOARD_UP_ARROW    0x52
 #include "pmw3610.h"
 
 #include <zephyr/logging/log.h>
