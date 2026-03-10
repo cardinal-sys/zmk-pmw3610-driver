@@ -96,6 +96,9 @@ struct pixart_config {
     int  scroll_inertia_tick_ms;
     int  scroll_flick_threshold;     /* avg raw delta/sample to detect flick (default 6) */
     int  scroll_flick_boost;         /* velocity multiplier *256 on flick (default 512=2x) */
+    bool scroll_accel;               /* amplify scroll delta based on speed */
+    int  scroll_accel_max_mult;      /* max multiplier at high speed (default 4) */
+    int  scroll_accel_threshold;     /* raw delta speed to reach max mult (default 20) */
     const uint8_t *numpad_layers;
     size_t numpad_layers_len;
     int  numpad_tick;          /* stroke threshold (default 15) */

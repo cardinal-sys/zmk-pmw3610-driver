@@ -612,8 +612,21 @@ static int pmw3610_report_data(const struct device *dev) {
         int16_t hwheel = 0;
         int16_t wheel  = 0;
 
+        /* Scroll acceleration: factor *256 fixed-point */
+        int32_t accel_factor = 256; /* 1.0 */
+        if (config->scroll_accel && config->scroll_accel_threshold > 0) {
+            int speed = MAX(abs(x), abs(y));
+            int mult  = config->scroll_accel_max_mult > 1 ? config->scroll_accel_max_mult : 1;
+            /* factor = 1 + (mult-1) * min(1, speed/threshold), in *256 */
+            int32_t ratio = (speed * 256) / config->scroll_accel_threshold;
+            if (ratio > 256) ratio = 256;
+            accel_factor = 256 + ((mult - 1) * ratio);
+        }
+
         if (abs(data->scroll_dx) >= CONFIG_PMW3610_ALT_SCROLL_TICK) {
-            hwheel = (int16_t)(data->scroll_dx / CONFIG_PMW3610_ALT_SCROLL_TICK);
+            hwheel = (int16_t)((data->scroll_dx / CONFIG_PMW3610_ALT_SCROLL_TICK)
+                               * accel_factor / 256);
+            if (hwheel == 0) hwheel = data->scroll_dx > 0 ? 1 : -1;
 #if IS_ENABLED(CONFIG_PMW3610_ALT_INVERT_SCROLL_X)
             hwheel = -hwheel;
 #endif
@@ -623,7 +636,9 @@ static int pmw3610_report_data(const struct device *dev) {
         }
 
         if (abs(data->scroll_dy) >= CONFIG_PMW3610_ALT_SCROLL_TICK) {
-            wheel = (int16_t)(data->scroll_dy / CONFIG_PMW3610_ALT_SCROLL_TICK);
+            wheel = (int16_t)((data->scroll_dy / CONFIG_PMW3610_ALT_SCROLL_TICK)
+                              * accel_factor / 256);
+            if (wheel == 0) wheel = data->scroll_dy > 0 ? 1 : -1;
 #if IS_ENABLED(CONFIG_PMW3610_ALT_INVERT_SCROLL_Y)
             wheel = -wheel;
 #endif
@@ -1042,6 +1057,9 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .scroll_inertia_tick_ms    = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_tick_ms, 16),  \
         .scroll_flick_threshold    = DT_PROP_OR(DT_DRV_INST(n), scroll_flick_threshold, 6),   \
         .scroll_flick_boost        = DT_PROP_OR(DT_DRV_INST(n), scroll_flick_boost, 512),     \
+        .scroll_accel              = DT_PROP(DT_DRV_INST(n), scroll_accel),                   \
+        .scroll_accel_max_mult     = DT_PROP_OR(DT_DRV_INST(n), scroll_accel_max_mult, 4),    \
+        .scroll_accel_threshold    = DT_PROP_OR(DT_DRV_INST(n), scroll_accel_threshold, 20),  \
     };                                                                              \
     DEVICE_DT_INST_DEFINE(n, pmw3610_init, NULL, &data##n, &config##n,             \
                           POST_KERNEL, CONFIG_INPUT_PMW3610_INIT_PRIORITY,          \
