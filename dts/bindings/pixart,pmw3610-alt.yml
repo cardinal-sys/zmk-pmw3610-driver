@@ -167,3 +167,19 @@ properties:
     description: |
       Velocity multiplier applied on flick, in fixed-point *256.
       512 = 2x boost, 384 = 1.5x, 256 = no boost. Default: 512.
+  scroll-accel:
+    type: boolean
+    description: |
+      Enable scroll acceleration: amplify scroll delta based on ball speed.
+      Slow movement = 1x, fast movement = scroll-accel-max-mult x.
+  scroll-accel-max-mult:
+    type: int
+    default: 4
+    description: |
+      Maximum scroll multiplier at high speed. Default 4 (4x at threshold).
+  scroll-accel-threshold:
+    type: int
+    default: 20
+    description: |
+      Raw delta speed at which maximum multiplier is reached. Default 20.
+      小さいほど少ない動きで最大倍率に達する。
