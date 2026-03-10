@@ -10,6 +10,7 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/input/input.h>
 #include <zephyr/pm/device.h>
+#include <string.h>
 #include <zmk/keymap.h>
 #include <zmk/events/activity_state_changed.h>
 #include "pmw3610.h"
@@ -352,15 +353,36 @@ static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
 
 //////// Inertia scroll ////////
 
+/* Compute decay% for current speed using 2-point linear interpolation.
+ * speed < slow_spd  → decay_slow (stops quickly)
+ * speed > fast_spd  → decay_fast (long glide)
+ * in between        → linear blend
+ */
+static int pmw3610_adaptive_decay(const struct pixart_config *config, int32_t vx, int32_t vy) {
+    int spd = MAX(abs(vx), abs(vy)) / 256;  /* convert from fixed-point to scroll-units/tick */
+    if (spd >= config->scroll_inertia_fast_spd) {
+        return config->scroll_inertia_decay_fast;
+    }
+    if (spd <= config->scroll_inertia_slow_spd) {
+        return config->scroll_inertia_decay;
+    }
+    /* linear blend between slow and fast */
+    int range = config->scroll_inertia_fast_spd - config->scroll_inertia_slow_spd;
+    int t     = spd - config->scroll_inertia_slow_spd;
+    return config->scroll_inertia_decay +
+           (config->scroll_inertia_decay_fast - config->scroll_inertia_decay) * t / range;
+}
+
 static void pmw3610_inertia_work_handler(struct k_work *work) {
     struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
     struct pixart_data *data = CONTAINER_OF(dwork, struct pixart_data, inertia_work);
     const struct device *dev = data->dev;
     const struct pixart_config *config = dev->config;
 
-    /* Apply decay: velocity *= decay% / 100 */
-    data->inertia_vx = data->inertia_vx * config->scroll_inertia_decay / 100;
-    data->inertia_vy = data->inertia_vy * config->scroll_inertia_decay / 100;
+    /* Speed-adaptive decay */
+    int decay = pmw3610_adaptive_decay(config, data->inertia_vx, data->inertia_vy);
+    data->inertia_vx = data->inertia_vx * decay / 100;
+    data->inertia_vy = data->inertia_vy * decay / 100;
 
     int16_t vx = (int16_t)(data->inertia_vx / 256);
     int16_t vy = (int16_t)(data->inertia_vy / 256);
@@ -433,7 +455,14 @@ static int pmw3610_report_data(const struct device *dev) {
         /* Cancel any ongoing inertia - user is scrolling again */
         if (config->scroll_inertia) {
             k_work_cancel_delayable(&data->inertia_work);
+            data->inertia_vx = 0;
+            data->inertia_vy = 0;
         }
+
+        /* Flick detection: push raw delta into ring buffer */
+        data->flick_hist_x[data->flick_idx] = x;
+        data->flick_hist_y[data->flick_idx] = y;
+        data->flick_idx = (data->flick_idx + 1) & 3;  /* mod 4 */
 
         data->scroll_dx += x;
         data->scroll_dy += y;
@@ -474,11 +503,24 @@ static int pmw3610_report_data(const struct device *dev) {
             input_report_rel(dev, INPUT_REL_WHEEL, 0, true, K_FOREVER);
 
             if (config->scroll_inertia) {
-                /* Accumulate velocity (fixed-point *256).
-                 * Add to existing to let fast flicks build up more momentum. */
-                data->inertia_vx += (int32_t)hwheel * 256;
-                data->inertia_vy += (int32_t)wheel  * 256;
-                /* Schedule inertia tick shortly after last movement */
+                /* Compute 4-sample average to detect flick */
+                int32_t avg_x = ((int32_t)data->flick_hist_x[0] + data->flick_hist_x[1] +
+                                  data->flick_hist_x[2] + data->flick_hist_x[3]) / 4;
+                int32_t avg_y = ((int32_t)data->flick_hist_y[0] + data->flick_hist_y[1] +
+                                  data->flick_hist_y[2] + data->flick_hist_y[3]) / 4;
+                bool flick = (abs(avg_x) >= config->scroll_flick_threshold ||
+                              abs(avg_y) >= config->scroll_flick_threshold);
+
+                int32_t new_vx = (int32_t)hwheel * 256;
+                int32_t new_vy = (int32_t)wheel  * 256;
+                if (flick) {
+                    new_vx = new_vx * config->scroll_flick_boost / 256;
+                    new_vy = new_vy * config->scroll_flick_boost / 256;
+                    LOG_DBG("Flick detected avg_x=%d avg_y=%d boost=%d",
+                            (int)avg_x, (int)avg_y, config->scroll_flick_boost);
+                }
+                data->inertia_vx = new_vx;
+                data->inertia_vy = new_vy;
                 k_work_schedule(&data->inertia_work,
                                 K_MSEC(config->scroll_inertia_tick_ms * 2));
             }
@@ -653,6 +695,9 @@ static int pmw3610_init(const struct device *dev) {
     data->arrows_dy    = 0;
     data->inertia_vx   = 0;
     data->inertia_vy   = 0;
+    data->flick_idx    = 0;
+    memset(data->flick_hist_x, 0, sizeof(data->flick_hist_x));
+    memset(data->flick_hist_y, 0, sizeof(data->flick_hist_y));
     data->last_poll_time = 0;
     data->last_x       = 0;
     data->last_y       = 0;
@@ -760,9 +805,14 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .arrows_layers = PMW3610_LAYERS_PTR(n, arrows_layers),                     \
         .arrows_layers_len = PMW3610_LAYERS_LEN(n, arrows_layers),                 \
         .arrows_tick = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),               \
-        .scroll_inertia = DT_PROP(DT_DRV_INST(n), scroll_inertia),                 \
-        .scroll_inertia_decay = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_decay, 85), \
-        .scroll_inertia_tick_ms = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_tick_ms, 16), \
+        .scroll_inertia = DT_PROP(DT_DRV_INST(n), scroll_inertia),                        \
+        .scroll_inertia_decay      = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_decay, 75),    \
+        .scroll_inertia_decay_fast = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_decay_fast, 92), \
+        .scroll_inertia_slow_spd   = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_slow_spd, 2),  \
+        .scroll_inertia_fast_spd   = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_fast_spd, 6),  \
+        .scroll_inertia_tick_ms    = DT_PROP_OR(DT_DRV_INST(n), scroll_inertia_tick_ms, 16),  \
+        .scroll_flick_threshold    = DT_PROP_OR(DT_DRV_INST(n), scroll_flick_threshold, 6),   \
+        .scroll_flick_boost        = DT_PROP_OR(DT_DRV_INST(n), scroll_flick_boost, 512),     \
     };                                                                              \
     DEVICE_DT_INST_DEFINE(n, pmw3610_init, NULL, &data##n, &config##n,             \
                           POST_KERNEL, CONFIG_INPUT_PMW3610_INIT_PRIORITY,          \
