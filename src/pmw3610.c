@@ -347,27 +347,29 @@ static void pmw3610_async_init(struct k_work *work) {
 //////// Arrows helper ////////
 
 static void pmw3610_send_arrow_key(uint32_t keycode) {
-    struct zmk_keycode_state_changed ev_press = {
-        .usage_page         = HID_USAGE_KEY,
-        .keycode            = keycode,
-        .implicit_modifiers = 0,
-        .explicit_modifiers = 0,
-        .state              = true,
-        .timestamp          = k_uptime_get(),
-    };
-    ZMK_EVENT_RAISE(ev_press);
+    struct zmk_keycode_state_changed *ev_press = new_zmk_keycode_state_changed();
+    if (ev_press) {
+        ev_press->usage_page         = HID_USAGE_KEY;
+        ev_press->keycode            = keycode;
+        ev_press->implicit_modifiers = 0;
+        ev_press->explicit_modifiers = 0;
+        ev_press->state              = true;
+        ev_press->timestamp          = k_uptime_get();
+        ZMK_EVENT_RAISE(*ev_press);
+    }
 
     k_sleep(K_MSEC(10));
 
-    struct zmk_keycode_state_changed ev_release = {
-        .usage_page         = HID_USAGE_KEY,
-        .keycode            = keycode,
-        .implicit_modifiers = 0,
-        .explicit_modifiers = 0,
-        .state              = false,
-        .timestamp          = k_uptime_get(),
-    };
-    ZMK_EVENT_RAISE(ev_release);
+    struct zmk_keycode_state_changed *ev_release = new_zmk_keycode_state_changed();
+    if (ev_release) {
+        ev_release->usage_page         = HID_USAGE_KEY;
+        ev_release->keycode            = keycode;
+        ev_release->implicit_modifiers = 0;
+        ev_release->explicit_modifiers = 0;
+        ev_release->state              = false;
+        ev_release->timestamp          = k_uptime_get();
+        ZMK_EVENT_RAISE(*ev_release);
+    }
 }
 
 //////// Report data ////////
