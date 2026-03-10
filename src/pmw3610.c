@@ -12,15 +12,13 @@
 #include <zephyr/pm/device.h>
 #include <zmk/keymap.h>
 #include <zmk/events/activity_state_changed.h>
-#include <zmk/events/keycode_state_changed.h>
-#include <dt-bindings/zmk/hid_usage_pages.h>
 #include "pmw3610.h"
 
-/* Arrow key HID Usage IDs (Usage Page HID_USAGE_KEY = 0x07) */
-#define ARROW_RIGHT_USAGE 0x4F
-#define ARROW_LEFT_USAGE  0x50
-#define ARROW_DOWN_USAGE  0x51
-#define ARROW_UP_USAGE    0x52
+/* Linux input keycodes for arrow keys */
+#define ARROWS_KEY_UP    103
+#define ARROWS_KEY_DOWN  108
+#define ARROWS_KEY_LEFT  105
+#define ARROWS_KEY_RIGHT 106
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(pmw3610, CONFIG_PMW3610_ALT_LOG_LEVEL);
@@ -346,30 +344,10 @@ static void pmw3610_async_init(struct k_work *work) {
 
 //////// Arrows helper ////////
 
-static void pmw3610_send_arrow_key(uint32_t keycode) {
-    struct zmk_keycode_state_changed *ev_press = new_zmk_keycode_state_changed();
-    if (ev_press) {
-        ev_press->usage_page         = HID_USAGE_KEY;
-        ev_press->keycode            = keycode;
-        ev_press->implicit_modifiers = 0;
-        ev_press->explicit_modifiers = 0;
-        ev_press->state              = true;
-        ev_press->timestamp          = k_uptime_get();
-        ZMK_EVENT_RAISE(*ev_press);
-    }
-
+static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
+    input_report(dev, INPUT_EV_KEY, key, 1, false, K_FOREVER);
     k_sleep(K_MSEC(10));
-
-    struct zmk_keycode_state_changed *ev_release = new_zmk_keycode_state_changed();
-    if (ev_release) {
-        ev_release->usage_page         = HID_USAGE_KEY;
-        ev_release->keycode            = keycode;
-        ev_release->implicit_modifiers = 0;
-        ev_release->explicit_modifiers = 0;
-        ev_release->state              = false;
-        ev_release->timestamp          = k_uptime_get();
-        ZMK_EVENT_RAISE(*ev_release);
-    }
+    input_report(dev, INPUT_EV_KEY, key, 0, true, K_FOREVER);
 }
 
 //////// Report data ////////
@@ -512,17 +490,17 @@ static int pmw3610_report_data(const struct device *dev) {
             uint32_t keycode;
             if (abs(data->arrows_dx) >= abs(data->arrows_dy)) {
                 keycode = data->arrows_dx > 0
-                    ? ARROW_RIGHT_USAGE
-                    : ARROW_LEFT_USAGE;
+                    ? ARROWS_KEY_RIGHT
+                    : ARROWS_KEY_LEFT;
             } else {
                 keycode = data->arrows_dy > 0
-                    ? ARROW_DOWN_USAGE
-                    : ARROW_UP_USAGE;
+                    ? ARROWS_KEY_DOWN
+                    : ARROWS_KEY_UP;
             }
             data->arrows_dx = 0;
             data->arrows_dy = 0;
 
-            pmw3610_send_arrow_key(keycode);
+            pmw3610_send_arrow_key(dev, (uint16_t)keycode);
         }
         return 0;
     }
