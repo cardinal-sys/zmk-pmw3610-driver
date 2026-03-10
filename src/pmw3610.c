@@ -349,22 +349,31 @@ static void pmw3610_async_init(struct k_work *work) {
 //////// Arrows helper ////////
 
 static void pmw3610_send_arrow_key(uint32_t keycode) {
-    int64_t ts = k_uptime_get();
-    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(
-        .usage_page = HID_USAGE_KEY,
-        .keycode = keycode,
-        .implicit_modifiers = 0,
-        .explicit_modifiers = 0,
-        .state = true,
-        .timestamp = ts));
+    struct zmk_keycode_state_changed *ev;
+
+    ev = new_zmk_keycode_state_changed();
+    if (ev) {
+        ev->usage_page         = HID_USAGE_KEY;
+        ev->keycode            = keycode;
+        ev->implicit_modifiers = 0;
+        ev->explicit_modifiers = 0;
+        ev->state              = true;
+        ev->timestamp          = k_uptime_get();
+        ZMK_EVENT_RAISE(ev);
+    }
+
     k_sleep(K_MSEC(10));
-    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed(
-        .usage_page = HID_USAGE_KEY,
-        .keycode = keycode,
-        .implicit_modifiers = 0,
-        .explicit_modifiers = 0,
-        .state = false,
-        .timestamp = k_uptime_get()));
+
+    ev = new_zmk_keycode_state_changed();
+    if (ev) {
+        ev->usage_page         = HID_USAGE_KEY;
+        ev->keycode            = keycode;
+        ev->implicit_modifiers = 0;
+        ev->explicit_modifiers = 0;
+        ev->state              = false;
+        ev->timestamp          = k_uptime_get();
+        ZMK_EVENT_RAISE(ev);
+    }
 }
 
 //////// Report data ////////
