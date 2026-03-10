@@ -13,16 +13,14 @@
 #include <zmk/keymap.h>
 #include <zmk/events/activity_state_changed.h>
 #include <zmk/events/keycode_state_changed.h>
-
-/* HID Usage Page: Keyboard/Keypad (0x07) */
-#define HID_USAGE_KEY 0x07
-
-/* HID Usage IDs for arrow keys */
-#define HID_USAGE_KEY_KEYBOARD_RIGHT_ARROW 0x4F
-#define HID_USAGE_KEY_KEYBOARD_LEFT_ARROW  0x50
-#define HID_USAGE_KEY_KEYBOARD_DOWN_ARROW  0x51
-#define HID_USAGE_KEY_KEYBOARD_UP_ARROW    0x52
+#include <dt-bindings/zmk/hid_usage_pages.h>
 #include "pmw3610.h"
+
+/* Arrow key HID Usage IDs (Usage Page HID_USAGE_KEY = 0x07) */
+#define ARROW_RIGHT_USAGE 0x4F
+#define ARROW_LEFT_USAGE  0x50
+#define ARROW_DOWN_USAGE  0x51
+#define ARROW_UP_USAGE    0x52
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(pmw3610, CONFIG_PMW3610_ALT_LOG_LEVEL);
@@ -349,31 +347,27 @@ static void pmw3610_async_init(struct k_work *work) {
 //////// Arrows helper ////////
 
 static void pmw3610_send_arrow_key(uint32_t keycode) {
-    struct zmk_keycode_state_changed *ev;
-
-    ev = new_zmk_keycode_state_changed();
-    if (ev) {
-        ev->usage_page         = HID_USAGE_KEY;
-        ev->keycode            = keycode;
-        ev->implicit_modifiers = 0;
-        ev->explicit_modifiers = 0;
-        ev->state              = true;
-        ev->timestamp          = k_uptime_get();
-        ZMK_EVENT_RAISE(ev);
-    }
+    struct zmk_keycode_state_changed ev_press = {
+        .usage_page         = HID_USAGE_KEY,
+        .keycode            = keycode,
+        .implicit_modifiers = 0,
+        .explicit_modifiers = 0,
+        .state              = true,
+        .timestamp          = k_uptime_get(),
+    };
+    ZMK_EVENT_RAISE(ev_press);
 
     k_sleep(K_MSEC(10));
 
-    ev = new_zmk_keycode_state_changed();
-    if (ev) {
-        ev->usage_page         = HID_USAGE_KEY;
-        ev->keycode            = keycode;
-        ev->implicit_modifiers = 0;
-        ev->explicit_modifiers = 0;
-        ev->state              = false;
-        ev->timestamp          = k_uptime_get();
-        ZMK_EVENT_RAISE(ev);
-    }
+    struct zmk_keycode_state_changed ev_release = {
+        .usage_page         = HID_USAGE_KEY,
+        .keycode            = keycode,
+        .implicit_modifiers = 0,
+        .explicit_modifiers = 0,
+        .state              = false,
+        .timestamp          = k_uptime_get(),
+    };
+    ZMK_EVENT_RAISE(ev_release);
 }
 
 //////// Report data ////////
@@ -516,12 +510,12 @@ static int pmw3610_report_data(const struct device *dev) {
             uint32_t keycode;
             if (abs(data->arrows_dx) >= abs(data->arrows_dy)) {
                 keycode = data->arrows_dx > 0
-                    ? HID_USAGE_KEY_KEYBOARD_RIGHT_ARROW
-                    : HID_USAGE_KEY_KEYBOARD_LEFT_ARROW;
+                    ? ARROW_RIGHT_USAGE
+                    : ARROW_LEFT_USAGE;
             } else {
                 keycode = data->arrows_dy > 0
-                    ? HID_USAGE_KEY_KEYBOARD_DOWN_ARROW
-                    : HID_USAGE_KEY_KEYBOARD_UP_ARROW;
+                    ? ARROW_DOWN_USAGE
+                    : ARROW_UP_USAGE;
             }
             data->arrows_dx = 0;
             data->arrows_dy = 0;
