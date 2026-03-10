@@ -89,6 +89,11 @@ properties:
     description: |
       Accumulated delta before emitting one arrow key event.
       Smaller value = more sensitive. Range 1-255. Default 10.
+  arrows-tick:
+    type: int
+    default: 10
+    description: |
+      Raw delta threshold to fire one arrow key event. Default 10.
   arrows-diagonal:
     type: boolean
     description: |
