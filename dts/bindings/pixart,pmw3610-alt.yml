@@ -62,19 +62,42 @@ properties:
       Range: 1 - 255. Default: 10.
   scroll-inertia:
     type: boolean
-    description: |
-      Enable inertia (momentum) scrolling.
-      When enabled, scroll velocity decays smoothly after the trackball stops.
+    description: Enable inertia (momentum) scrolling.
   scroll-inertia-decay:
     type: int
-    default: 85
+    default: 75
     description: |
-      Velocity retained per timer tick, as a percentage (0-99).
-      Higher = slower decay / longer glide. Default: 85 (85% retained each tick).
-      Examples: 90 = long glide, 75 = short snappy glide.
+      Decay % applied when speed is slow (scroll-inertia-slow-spd or below).
+      Lower = stops faster. Default: 75.
+  scroll-inertia-decay-fast:
+    type: int
+    default: 92
+    description: |
+      Decay % applied when speed is fast (scroll-inertia-fast-spd or above).
+      Higher = longer glide on fast flicks. Default: 92.
+  scroll-inertia-slow-spd:
+    type: int
+    default: 2
+    description: |
+      Speed (scroll units/tick) at or below which slow decay applies. Default: 2.
+  scroll-inertia-fast-spd:
+    type: int
+    default: 6
+    description: |
+      Speed (scroll units/tick) at or above which fast decay applies. Default: 6.
   scroll-inertia-tick-ms:
     type: int
     default: 16
+    description: Timer interval for inertia decay in ms. Default: 16 (~60fps).
+  scroll-flick-threshold:
+    type: int
+    default: 6
     description: |
-      Timer interval for inertia decay in milliseconds. Default: 16 (~60fps).
-      Smaller = smoother but more CPU. Larger = choppier but lighter.
+      4-sample average raw delta needed to trigger flick detection.
+      Lower = more sensitive. Default: 6.
+  scroll-flick-boost:
+    type: int
+    default: 512
+    description: |
+      Velocity multiplier applied on flick, in fixed-point *256.
+      512 = 2x boost, 384 = 1.5x, 256 = no boost. Default: 512.
