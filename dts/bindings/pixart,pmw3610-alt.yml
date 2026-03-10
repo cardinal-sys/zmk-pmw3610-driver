@@ -60,3 +60,21 @@ properties:
       Accumulated delta before emitting one arrow key event.
       Smaller value = more sensitive (fires more frequently).
       Range: 1 - 255. Default: 10.
+  scroll-inertia:
+    type: boolean
+    description: |
+      Enable inertia (momentum) scrolling.
+      When enabled, scroll velocity decays smoothly after the trackball stops.
+  scroll-inertia-decay:
+    type: int
+    default: 85
+    description: |
+      Velocity retained per timer tick, as a percentage (0-99).
+      Higher = slower decay / longer glide. Default: 85 (85% retained each tick).
+      Examples: 90 = long glide, 75 = short snappy glide.
+  scroll-inertia-tick-ms:
+    type: int
+    default: 16
+    description: |
+      Timer interval for inertia decay in milliseconds. Default: 16 (~60fps).
+      Smaller = smoother but more CPU. Larger = choppier but lighter.
