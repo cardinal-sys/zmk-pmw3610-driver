@@ -88,7 +88,8 @@ properties:
   scroll-inertia-tick-ms:
     type: int
     default: 16
-    description: Timer interval for inertia decay in ms. Default: 16 (~60fps).
+    description: |
+      Timer interval for inertia decay in ms. Default 16ms (~60fps).
   scroll-flick-threshold:
     type: int
     default: 6
