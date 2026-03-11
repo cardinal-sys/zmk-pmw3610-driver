@@ -59,6 +59,7 @@ struct pixart_data {
     int32_t                      numpad_dy;
     uint8_t                      numpad_state;  /* 0=idle, 1=waiting 2nd stroke */
     uint8_t                      numpad_group;  /* 0=up(1-3) 1=left(4-6) 2=right(7-9) */
+    int64_t                      numpad_cooldown_until; /* uptime ms: ignore input until this */
     struct k_work_delayable      numpad_timeout_work;
 };
 

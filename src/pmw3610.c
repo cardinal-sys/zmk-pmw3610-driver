@@ -453,6 +453,13 @@ static int pmw3610_numpad_process(const struct device *dev, int16_t x, int16_t y
     const struct pixart_config *config = dev->config;
     int tick = config->numpad_tick;
 
+    /* クールダウン中は入力を無視してアキュムレータもリセット */
+    if (k_uptime_get() < data->numpad_cooldown_until) {
+        data->numpad_dx = 0;
+        data->numpad_dy = 0;
+        return 0;
+    }
+
     data->numpad_dx += x;
     data->numpad_dy += y;
 
@@ -470,9 +477,10 @@ static int pmw3610_numpad_process(const struct device *dev, int16_t x, int16_t y
         dir = data->numpad_dy > 0 ? 1 : 0;
     }
 
-    /* アキュムレータをリセット */
+    /* アキュムレータをリセット＋クールダウン開始（勢いによる誤検出防止） */
     data->numpad_dx = 0;
     data->numpad_dy = 0;
+    data->numpad_cooldown_until = k_uptime_get() + 180; /* 180ms無視 */
 
     if (data->numpad_state == 0) {
         /* 1ストローク目: 全方向でgroup決定→2ストローク待ち */
