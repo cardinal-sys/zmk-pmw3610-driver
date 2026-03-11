@@ -468,13 +468,23 @@ static int pmw3610_numpad_process(const struct device *dev, int16_t x, int16_t y
         return 0;
     }
 
-    /* 主軸を判定 */
-    bool horiz = abs(data->numpad_dx) >= abs(data->numpad_dy);
+    /* 主軸を判定 (Keyball: センサーXY物理配置によりX/Y入替) */
+    bool horiz = abs(data->numpad_dy) >= abs(data->numpad_dx);
     int dir; /* 0=上 1=下 2=左 3=右 */
     if (horiz) {
-        dir = data->numpad_dx > 0 ? 3 : 2;
+        dir = data->numpad_dy > 0 ? 3 : 2;
     } else {
-        dir = data->numpad_dy > 0 ? 1 : 0;
+        dir = data->numpad_dx > 0 ? 1 : 0;
+    }
+
+    /* 斜め誤認識防止: 主軸が副軸の1.8倍以上でないと無視 */
+    int major = horiz ? abs(data->numpad_dy) : abs(data->numpad_dx);
+    int minor = horiz ? abs(data->numpad_dx) : abs(data->numpad_dy);
+    if (major < minor * 18 / 10) {
+        data->numpad_dx = 0;
+        data->numpad_dy = 0;
+        data->numpad_cooldown_until = k_uptime_get() + 180;
+        return 0;
     }
 
     /* アキュムレータをリセット＋クールダウン開始（勢いによる誤検出防止） */
