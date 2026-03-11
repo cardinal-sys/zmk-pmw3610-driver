@@ -84,6 +84,11 @@ properties:
       2ストローク目の入力待ちタイムアウト(ms)。
       この時間内に2ストローク目が来なければリセット。Default 1000ms。
 
+  arrows-no-repeat-layers:
+    type: array
+    description: |
+      Layers where arrow key auto-repeat is disabled (single fire only).
+      Example: arrows-no-repeat-layers = <2>;
   arrows-tick:
     type: int
     default: 10
