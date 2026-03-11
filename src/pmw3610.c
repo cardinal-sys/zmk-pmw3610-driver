@@ -13,6 +13,8 @@
 #include <string.h>
 #include <zmk/keymap.h>
 #include <zmk/events/activity_state_changed.h>
+#include <zmk/event_manager.h>
+#include <zmk/events/keycode_state_changed.h>
 #include "pmw3610.h"
 
 /* Linux input keycodes for arrow keys */
@@ -359,12 +361,52 @@ static void pmw3610_async_init(struct k_work *work) {
     }
 }
 
+//////// Linux keycode → ZMK HID encoded (keyboard page 0x07) ////////
+
+/* input_report(INPUT_EV_KEY) is NOT processed by ZMK's pointing input handler.
+ * Must use ZMK's keycode_state_changed event system instead. */
+static uint32_t linux_key_to_zmk(uint16_t linux_key) {
+#define KB(hid) (((uint32_t)0x07 << 16) | (hid))
+    switch (linux_key) {
+        case 102: return KB(0x4A); /* Home */
+        case 103: return KB(0x52); /* Up */
+        case 104: return KB(0x4B); /* PageUp */
+        case 105: return KB(0x50); /* Left */
+        case 106: return KB(0x4F); /* Right */
+        case 107: return KB(0x4D); /* End */
+        case 108: return KB(0x51); /* Down */
+        case 109: return KB(0x4E); /* PageDown */
+        case 2:   return KB(0x1E); /* 1 */
+        case 3:   return KB(0x1F); /* 2 */
+        case 4:   return KB(0x20); /* 3 */
+        case 5:   return KB(0x21); /* 4 */
+        case 6:   return KB(0x22); /* 5 */
+        case 7:   return KB(0x23); /* 6 */
+        case 8:   return KB(0x24); /* 7 */
+        case 9:   return KB(0x25); /* 8 */
+        case 10:  return KB(0x26); /* 9 */
+        case 11:  return KB(0x27); /* 0 */
+        case 28:  return KB(0x28); /* Enter */
+        case 14:  return KB(0x2A); /* Backspace */
+        case 52:  return KB(0x37); /* . */
+        default:  return 0;
+    }
+#undef KB
+}
+
+static void pmw3610_raise_key(uint16_t linux_key) {
+    uint32_t usage = linux_key_to_zmk(linux_key);
+    if (usage == 0) return;
+    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed_from_encoded(usage, true, k_uptime_get()));
+    k_msleep(5);
+    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed_from_encoded(usage, false, k_uptime_get()));
+}
+
 //////// Arrows helper ////////
 
 static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
-    input_report(dev, INPUT_EV_KEY, key, 1, false, K_FOREVER);
-    k_sleep(K_MSEC(10));
-    input_report(dev, INPUT_EV_KEY, key, 0, true, K_FOREVER);
+    ARG_UNUSED(dev);
+    pmw3610_raise_key(key);
 }
 
 //////// Numpad 2-stroke input ////////
@@ -386,9 +428,8 @@ static const uint16_t numpad_keys[3][3] = {
 static const uint16_t numpad_down_keys[4] = {11, 52, 14, 28}; /* 0, ., BS, Enter */
 
 static void pmw3610_numpad_send(const struct device *dev, uint16_t keycode) {
-    input_report(dev, INPUT_EV_KEY, keycode, 1, false, K_FOREVER);
-    k_sleep(K_MSEC(10));
-    input_report(dev, INPUT_EV_KEY, keycode, 0, true, K_FOREVER);
+    ARG_UNUSED(dev);
+    pmw3610_raise_key(keycode);
     LOG_DBG("numpad key=%d", keycode);
 }
 
