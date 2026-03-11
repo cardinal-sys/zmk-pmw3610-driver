@@ -487,13 +487,14 @@ static int pmw3610_numpad_process(const struct device *dev, int16_t x, int16_t y
         dir = data->numpad_dy > 0 ? 1 : 0;
     }
 
-    /* アキュムレータをリセット＋クールダウン開始（勢いによる誤検出防止） */
+    /* アキュムレータをリセット */
     data->numpad_dx = 0;
     data->numpad_dy = 0;
-    data->numpad_cooldown_until = k_uptime_get() + 180; /* 180ms無視 */
 
     if (data->numpad_state == 0) {
-        /* 1ストローク目: 全方向でgroup決定→2ストローク待ち */
+        /* 1ストローク目: 短いクールダウン（勢い防止のみ）→すぐ2ストローク受付 */
+        data->numpad_cooldown_until = k_uptime_get() + 80;
+        /* 全方向でgroup決定→2ストローク待ち */
         if (dir == 0)      data->numpad_group = 0;  /* 上: 1-3 */
         else if (dir == 2) data->numpad_group = 1;  /* 左: 4-6 */
         else if (dir == 3) data->numpad_group = 2;  /* 右: 7-9 */
@@ -502,6 +503,8 @@ static int pmw3610_numpad_process(const struct device *dev, int16_t x, int16_t y
         k_work_schedule(&data->numpad_timeout_work,
                         K_MSEC(config->numpad_timeout_ms));
     } else {
+        /* 2ストローク目後: 長めのクールダウンで誤入力防止 */
+        data->numpad_cooldown_until = k_uptime_get() + 200;
         /* 2ストローク目 */
         if (data->numpad_group <= 2) {
             /* group 0-2: 左=col0 上=col1 右=col2 */
