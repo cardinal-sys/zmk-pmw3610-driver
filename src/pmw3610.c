@@ -366,37 +366,39 @@ static void pmw3610_async_init(struct k_work *work) {
 /* input_report(INPUT_EV_KEY) is NOT processed by ZMK's pointing input handler.
  * Must use ZMK's keycode_state_changed event system instead. */
 static uint32_t linux_key_to_zmk(uint16_t linux_key) {
-#define KB(hid) (((uint32_t)0x07 << 16) | (hid))
+#define HID_KB(hid) (((uint32_t)0x07 << 16) | (hid))
     switch (linux_key) {
-        case 102: return KB(0x4A); /* Home */
-        case 103: return KB(0x52); /* Up */
-        case 104: return KB(0x4B); /* PageUp */
-        case 105: return KB(0x50); /* Left */
-        case 106: return KB(0x4F); /* Right */
-        case 107: return KB(0x4D); /* End */
-        case 108: return KB(0x51); /* Down */
-        case 109: return KB(0x4E); /* PageDown */
-        case 2:   return KB(0x1E); /* 1 */
-        case 3:   return KB(0x1F); /* 2 */
-        case 4:   return KB(0x20); /* 3 */
-        case 5:   return KB(0x21); /* 4 */
-        case 6:   return KB(0x22); /* 5 */
-        case 7:   return KB(0x23); /* 6 */
-        case 8:   return KB(0x24); /* 7 */
-        case 9:   return KB(0x25); /* 8 */
-        case 10:  return KB(0x26); /* 9 */
-        case 11:  return KB(0x27); /* 0 */
-        case 28:  return KB(0x28); /* Enter */
-        case 14:  return KB(0x2A); /* Backspace */
-        case 52:  return KB(0x37); /* . */
+        case 102: return HID_KB(0x4A); /* Home */
+        case 103: return HID_KB(0x52); /* Up */
+        case 104: return HID_KB(0x4B); /* PageUp */
+        case 105: return HID_KB(0x50); /* Left */
+        case 106: return HID_KB(0x4F); /* Right */
+        case 107: return HID_KB(0x4D); /* End */
+        case 108: return HID_KB(0x51); /* Down */
+        case 109: return HID_KB(0x4E); /* PageDown */
+        case 2:   return HID_KB(0x1E); /* 1 */
+        case 3:   return HID_KB(0x1F); /* 2 */
+        case 4:   return HID_KB(0x20); /* 3 */
+        case 5:   return HID_KB(0x21); /* 4 */
+        case 6:   return HID_KB(0x22); /* 5 */
+        case 7:   return HID_KB(0x23); /* 6 */
+        case 8:   return HID_KB(0x24); /* 7 */
+        case 9:   return HID_KB(0x25); /* 8 */
+        case 10:  return HID_KB(0x26); /* 9 */
+        case 11:  return HID_KB(0x27); /* 0 */
+        case 28:  return HID_KB(0x28); /* Enter */
+        case 14:  return HID_KB(0x2A); /* Backspace */
+        case 52:  return HID_KB(0x37); /* . */
+        case 15:  return HID_KB(0x2B); /* Tab */
+        case 111: return HID_KB(0x4C); /* Delete */
         /* Special combos: modifier + key */
-        case 1000: return (0x08U << 24) | KB(0x1D); /* Cmd+Z */
-        case 1001: return (0x08U << 24) | KB(0x1B); /* Cmd+X */
-        case 1002: return (0x08U << 24) | KB(0x06); /* Cmd+C */
-        case 1003: return (0x08U << 24) | KB(0x19); /* Cmd+V */
+        case 1000: return (0x08U << 24) | HID_KB(0x1D); /* Cmd+Z */
+        case 1001: return (0x08U << 24) | HID_KB(0x1B); /* Cmd+X */
+        case 1002: return (0x08U << 24) | HID_KB(0x06); /* Cmd+C */
+        case 1003: return (0x08U << 24) | HID_KB(0x19); /* Cmd+V */
         default:  return 0;
     }
-#undef KB
+#undef HID_KB
 }
 
 static void pmw3610_raise_key(uint16_t linux_key) {
@@ -1089,6 +1091,7 @@ static const struct sensor_driver_api pmw3610_driver_api = {
     PMW3610_LAYERS_DEFINE(n, scroll_layers)                                         \
     PMW3610_LAYERS_DEFINE(n, snipe_layers)                                          \
     PMW3610_LAYERS_DEFINE(n, numpad_layers)                                         \
+    PMW3610_LAYERS_DEFINE(n, arrows_no_repeat_layers)                               \
     COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles),                         \
         (static const uint16_t arrows_profiles_##n[] = DT_INST_PROP(n, arrows_profiles);), \
         ())                                                                         \
