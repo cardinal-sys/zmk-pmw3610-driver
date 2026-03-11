@@ -397,9 +397,9 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
 static void pmw3610_raise_key(uint16_t linux_key) {
     uint32_t usage = linux_key_to_zmk(linux_key);
     if (usage == 0) return;
-    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed_from_encoded(usage, true, k_uptime_get()));
+    raise_zmk_keycode_state_changed_from_encoded(usage, true, k_uptime_get());
     k_msleep(5);
-    ZMK_EVENT_RAISE(new_zmk_keycode_state_changed_from_encoded(usage, false, k_uptime_get()));
+    raise_zmk_keycode_state_changed_from_encoded(usage, false, k_uptime_get());
 }
 
 //////// Arrows helper ////////
