@@ -859,7 +859,9 @@ static int pmw3610_report_data(const struct device *dev) {
         }
 
         /* Auto-repeat: track held direction */
-        if (config->arrows_repeat_delay_ms > 0 && primary_key != 0) {
+        bool no_repeat = pmw3610_layer_match(config->arrows_no_repeat_layers,
+                                              config->arrows_no_repeat_layers_len);
+        if (!no_repeat && config->arrows_repeat_delay_ms > 0 && primary_key != 0) {
             if (primary_key != data->arrows_last_key) {
                 k_work_cancel_delayable(&data->arrows_repeat_work);
                 data->arrows_repeating  = false;
