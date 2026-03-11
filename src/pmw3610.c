@@ -69,14 +69,14 @@ static bool pmw3610_layer_match(const uint8_t *layers, size_t len) {
 }
 
 /* arrows_profiles: flat array of uint16 groups [layer, up, down, left, right]
- * Returns pointer to the matching group (5 elements), or NULL if no match. */
+ * Returns pointer to the matching group (6 elements), or NULL if no match. */
 static const uint16_t *pmw3610_arrows_profile_match(const struct pixart_config *config) {
     if (config->arrows_profiles == NULL || config->arrows_profiles_count == 0) {
         return NULL;
     }
     uint16_t active = (uint16_t)zmk_keymap_highest_layer_active();
     for (size_t i = 0; i < config->arrows_profiles_count; i++) {
-        const uint16_t *p = &config->arrows_profiles[i * 5];
+        const uint16_t *p = &config->arrows_profiles[i * 6];
         if (p[0] == active) {
             return p;
         }
@@ -396,6 +396,7 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         case 1001: return (0x08U << 24) | HID_KB(0x1B); /* Cmd+X */
         case 1002: return (0x08U << 24) | HID_KB(0x06); /* Cmd+C */
         case 1003: return (0x08U << 24) | HID_KB(0x19); /* Cmd+V */
+        case 1010: return (0x02U << 24) | HID_KB(0x2B); /* Shift+Tab */
         default:  return 0;
     }
 #undef HID_KB
@@ -793,7 +794,7 @@ static int pmw3610_report_data(const struct device *dev) {
      * ====================================================== */
     const uint16_t *profile = pmw3610_arrows_profile_match(config);
     if (profile != NULL) {
-        /* profile[0]=layer, [1]=up, [2]=down, [3]=left, [4]=right */
+        /* profile[0]=layer, [1]=up, [2]=down, [3]=left, [4]=right, [5]=tick(0=global) */
         uint16_t key_up    = profile[1];
         uint16_t key_down  = profile[2];
         uint16_t key_left  = profile[3];
@@ -811,7 +812,7 @@ static int pmw3610_report_data(const struct device *dev) {
         data->arrows_dy += y;
 
         /* Acceleration: reduce effective tick based on raw input magnitude */
-        int tick = config->arrows_tick;
+        int tick = (profile[5] != 0) ? (int)profile[5] : config->arrows_tick;
         if (config->arrows_accel) {
             int mag = MAX(abs(x), abs(y));
             if (mag >= config->arrows_accel_threshold) {
@@ -1123,7 +1124,7 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .arrows_profiles = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles),  \
             (arrows_profiles_##n), (NULL)),                                         \
         .arrows_profiles_count = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles), \
-            (DT_INST_PROP_LEN(n, arrows_profiles) / 5), (0)),                      \
+            (DT_INST_PROP_LEN(n, arrows_profiles) / 6), (0)),                      \
         .arrows_tick             = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),             \
         .arrows_diagonal         = DT_PROP(DT_DRV_INST(n), arrows_diagonal),                 \
         .arrows_accel            = DT_PROP(DT_DRV_INST(n), arrows_accel),                    \
