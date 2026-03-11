@@ -79,6 +79,8 @@ struct pixart_config {
     size_t scroll_layers_len;
     const uint8_t *snipe_layers;
     size_t snipe_layers_len;
+    const uint8_t *arrows_no_repeat_layers;
+    size_t arrows_no_repeat_layers_len;
     /* arrows profiles: flat array of [layer, key_up, key_down, key_left, key_right, ...] */
     const uint16_t *arrows_profiles;
     size_t arrows_profiles_count;  /* number of profiles (array_len / 5) */

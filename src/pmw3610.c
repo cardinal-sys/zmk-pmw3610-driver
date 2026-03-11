@@ -389,6 +389,11 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         case 28:  return KB(0x28); /* Enter */
         case 14:  return KB(0x2A); /* Backspace */
         case 52:  return KB(0x37); /* . */
+        /* Special combos: modifier + key */
+        case 1000: return (0x08U << 24) | KB(0x1D); /* Cmd+Z */
+        case 1001: return (0x08U << 24) | KB(0x1B); /* Cmd+X */
+        case 1002: return (0x08U << 24) | KB(0x06); /* Cmd+C */
+        case 1003: return (0x08U << 24) | KB(0x19); /* Cmd+V */
         default:  return 0;
     }
 #undef KB
@@ -595,6 +600,14 @@ static void pmw3610_arrows_repeat_handler(struct k_work *work) {
     const struct pixart_config *config = dev->config;
 
     if (!data->arrows_repeating || data->arrows_last_key == 0) {
+        return;
+    }
+
+    /* no-repeat layers: skip */
+    if (pmw3610_layer_match(config->arrows_no_repeat_layers,
+                             config->arrows_no_repeat_layers_len)) {
+        data->arrows_repeating = false;
+        data->arrows_last_key  = 0;
         return;
     }
 
@@ -1096,6 +1109,8 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .scroll_layers_len = PMW3610_LAYERS_LEN(n, scroll_layers),                 \
         .snipe_layers = PMW3610_LAYERS_PTR(n, snipe_layers),                       \
         .snipe_layers_len = PMW3610_LAYERS_LEN(n, snipe_layers),                   \
+        .arrows_no_repeat_layers = PMW3610_LAYERS_PTR(n, arrows_no_repeat_layers), \
+        .arrows_no_repeat_layers_len = PMW3610_LAYERS_LEN(n, arrows_no_repeat_layers), \
         .numpad_layers = PMW3610_LAYERS_PTR(n, numpad_layers),                     \
         .numpad_layers_len = PMW3610_LAYERS_LEN(n, numpad_layers),                 \
         .numpad_tick = DT_PROP_OR(DT_DRV_INST(n), numpad_tick, 15),               \
