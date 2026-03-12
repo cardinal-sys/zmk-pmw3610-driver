@@ -69,14 +69,14 @@ static bool pmw3610_layer_match(const uint8_t *layers, size_t len) {
 }
 
 /* arrows_profiles: flat array of uint16 groups [layer, up, down, left, right]
- * Returns pointer to the matching group (6 elements), or NULL if no match. */
+ * Returns pointer to the matching group (8 elements), or NULL if no match. */
 static const uint16_t *pmw3610_arrows_profile_match(const struct pixart_config *config) {
     if (config->arrows_profiles == NULL || config->arrows_profiles_count == 0) {
         return NULL;
     }
     uint16_t active = (uint16_t)zmk_keymap_highest_layer_active();
     for (size_t i = 0; i < config->arrows_profiles_count; i++) {
-        const uint16_t *p = &config->arrows_profiles[i * 6];
+        const uint16_t *p = &config->arrows_profiles[i * 8];
         if (p[0] == active) {
             return p;
         }
@@ -794,11 +794,13 @@ static int pmw3610_report_data(const struct device *dev) {
      * ====================================================== */
     const uint16_t *profile = pmw3610_arrows_profile_match(config);
     if (profile != NULL) {
-        /* profile[0]=layer, [1]=up, [2]=down, [3]=left, [4]=right, [5]=tick(0=global) */
+        /* profile[0]=layer, [1]=up, [2]=down, [3]=left, [4]=right, [5]=tick(0=global), [6]=remainder, [7]=no_diagonal */
         uint16_t key_up    = profile[1];
         uint16_t key_down  = profile[2];
         uint16_t key_left  = profile[3];
         uint16_t key_right = profile[4];
+        bool use_remainder  = (profile[6] != 0);
+        bool no_diagonal    = (profile[7] != 0);
 
         data->scroll_dx = 0;
         data->scroll_dy = 0;
@@ -808,15 +810,11 @@ static int pmw3610_report_data(const struct device *dev) {
         data->last_x = 0;
         data->last_y = 0;
 
-        /* Acceleration: reduce effective tick based on raw input magnitude */
-        int tick = (profile[5] != 0) ? (int)profile[5] : config->arrows_tick;
-
         data->arrows_dx += x;
         data->arrows_dy += y;
 
-        /* アキュムレータをtick*2にクランプ（速く転がしても逆方向キーが出ないように） */
-        data->arrows_dx = CLAMP(data->arrows_dx, -tick * 2, tick * 2);
-        data->arrows_dy = CLAMP(data->arrows_dy, -tick * 2, tick * 2);
+        /* Acceleration: reduce effective tick based on raw input magnitude */
+        int tick = (profile[5] != 0) ? (int)profile[5] : config->arrows_tick;
         if (config->arrows_accel) {
             int mag = MAX(abs(x), abs(y));
             if (mag >= config->arrows_accel_threshold) {
@@ -835,17 +833,17 @@ static int pmw3610_report_data(const struct device *dev) {
 
         if (abs(data->arrows_dx) >= tick) {
             emit_x = data->arrows_dx > 0 ? key_right : key_left;
-            data->arrows_dx = data->arrows_dx % tick;
+            data->arrows_dx = use_remainder ? (data->arrows_dx % tick) : 0;
             fired_x = true;
         }
         if (abs(data->arrows_dy) >= tick) {
             emit_y = data->arrows_dy > 0 ? key_down : key_up;
-            data->arrows_dy = data->arrows_dy % tick;
+            data->arrows_dy = use_remainder ? (data->arrows_dy % tick) : 0;
             fired_y = true;
         }
 
-        /* Diagonal suppression unless arrows-diagonal is enabled */
-        if (!config->arrows_diagonal && fired_x && fired_y) {
+        /* Diagonal suppression: per-profile flag or global arrows-diagonal */
+        if ((no_diagonal || !config->arrows_diagonal) && fired_x && fired_y) {
             if (abs(x) >= abs(y)) {
                 fired_y = false;
             } else {
@@ -1128,7 +1126,7 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .arrows_profiles = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles),  \
             (arrows_profiles_##n), (NULL)),                                         \
         .arrows_profiles_count = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles), \
-            (DT_INST_PROP_LEN(n, arrows_profiles) / 6), (0)),                      \
+            (DT_INST_PROP_LEN(n, arrows_profiles) / 8), (0)),                      \
         .arrows_tick             = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),             \
         .arrows_diagonal         = DT_PROP(DT_DRV_INST(n), arrows_diagonal),                 \
         .arrows_accel            = DT_PROP(DT_DRV_INST(n), arrows_accel),                    \
