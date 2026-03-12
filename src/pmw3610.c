@@ -397,6 +397,10 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         case 1002: return (0x08U << 24) | HID_KB(0x06); /* Cmd+C */
         case 1003: return (0x08U << 24) | HID_KB(0x19); /* Cmd+V */
         case 1010: return (0x02U << 24) | HID_KB(0x2B); /* Shift+Tab */
+        case 1020: return (0x02U << 24) | HID_KB(0x52); /* Shift+Up */
+        case 1021: return (0x02U << 24) | HID_KB(0x51); /* Shift+Down */
+        case 1022: return (0x02U << 24) | HID_KB(0x4F); /* Shift+Right */
+        case 1023: return (0x02U << 24) | HID_KB(0x50); /* Shift+Left */
         default:  return 0;
     }
 #undef HID_KB
