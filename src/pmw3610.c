@@ -811,6 +811,10 @@ static int pmw3610_report_data(const struct device *dev) {
         data->arrows_dx += x;
         data->arrows_dy += y;
 
+        /* アキュムレータをtick*2にクランプ（速く転がしても逆方向キーが出ないように） */
+        data->arrows_dx = CLAMP(data->arrows_dx, -tick * 2, tick * 2);
+        data->arrows_dy = CLAMP(data->arrows_dy, -tick * 2, tick * 2);
+
         /* Acceleration: reduce effective tick based on raw input magnitude */
         int tick = (profile[5] != 0) ? (int)profile[5] : config->arrows_tick;
         if (config->arrows_accel) {
@@ -831,12 +835,12 @@ static int pmw3610_report_data(const struct device *dev) {
 
         if (abs(data->arrows_dx) >= tick) {
             emit_x = data->arrows_dx > 0 ? key_right : key_left;
-            data->arrows_dx = 0;
+            data->arrows_dx = data->arrows_dx % tick;
             fired_x = true;
         }
         if (abs(data->arrows_dy) >= tick) {
             emit_y = data->arrows_dy > 0 ? key_down : key_up;
-            data->arrows_dy = 0;
+            data->arrows_dy = data->arrows_dy % tick;
             fired_y = true;
         }
 
