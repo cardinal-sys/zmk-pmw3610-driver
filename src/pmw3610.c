@@ -808,15 +808,15 @@ static int pmw3610_report_data(const struct device *dev) {
         data->last_x = 0;
         data->last_y = 0;
 
+        /* Acceleration: reduce effective tick based on raw input magnitude */
+        int tick = (profile[5] != 0) ? (int)profile[5] : config->arrows_tick;
+
         data->arrows_dx += x;
         data->arrows_dy += y;
 
         /* アキュムレータをtick*2にクランプ（速く転がしても逆方向キーが出ないように） */
         data->arrows_dx = CLAMP(data->arrows_dx, -tick * 2, tick * 2);
         data->arrows_dy = CLAMP(data->arrows_dy, -tick * 2, tick * 2);
-
-        /* Acceleration: reduce effective tick based on raw input magnitude */
-        int tick = (profile[5] != 0) ? (int)profile[5] : config->arrows_tick;
         if (config->arrows_accel) {
             int mag = MAX(abs(x), abs(y));
             if (mag >= config->arrows_accel_threshold) {
