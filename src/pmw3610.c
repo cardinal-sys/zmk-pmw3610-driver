@@ -810,6 +810,16 @@ static int pmw3610_report_data(const struct device *dev) {
         data->last_x = 0;
         data->last_y = 0;
 
+        /* 方向が変わったらアキュムレータをリセット（ボール反転による逆キー防止） */
+        if (data->arrows_dx != 0 && x != 0 &&
+            ((data->arrows_dx > 0) != (x > 0))) {
+            data->arrows_dx = 0;
+        }
+        if (data->arrows_dy != 0 && y != 0 &&
+            ((data->arrows_dy > 0) != (y > 0))) {
+            data->arrows_dy = 0;
+        }
+
         data->arrows_dx += x;
         data->arrows_dy += y;
 
