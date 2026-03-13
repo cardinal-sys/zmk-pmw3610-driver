@@ -84,6 +84,9 @@ struct pixart_config {
     /* arrows profiles: flat array of [layer, key_up, key_down, key_left, key_right, ...] */
     const uint16_t *arrows_profiles;
     size_t arrows_profiles_count;  /* number of profiles (array_len / 5) */
+    /* arrows-alt profiles: active only when arrows_alt_mode is set */
+    const uint16_t *arrows_alt_profiles;
+    size_t          arrows_alt_profiles_count;
     int arrows_tick;
     bool arrows_diagonal;         /* fire both axes on diagonal input */
     bool arrows_accel;            /* reduce tick as speed increases */
@@ -107,6 +110,8 @@ struct pixart_config {
     int  numpad_tick;          /* stroke threshold (default 15) */
     int  numpad_timeout_ms;    /* 2nd stroke timeout ms (default 1000) */
 };
+
+void pmw3610_arrows_alt_mode_set(bool val);
 
 #ifdef __cplusplus
 }

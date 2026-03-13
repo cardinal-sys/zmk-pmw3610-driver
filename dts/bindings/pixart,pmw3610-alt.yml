@@ -183,3 +183,11 @@ properties:
     description: |
       Raw delta speed at which maximum multiplier is reached. Default 20.
       小さいほど少ない動きで最大倍率に達する。
+  arrows-alt-profiles:
+    type: array
+    description: |
+      arrows_alt_mode が ON のときだけ有効なレイヤープロファイル。
+      8要素×Nプロファイル（arrows-profiles と同形式）:
+      [layer, key_up, key_down, key_left, key_right, tick_override, use_remainder, no_diagonal]
+      zmk_keymap_layer_active() で判定するため最高レイヤーでなくても一致する。
+      例: MOUSE レイヤー（4）で &arrows_alt 3 を保持中にレイヤー3のプロファイルを使う。

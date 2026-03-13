@@ -84,6 +84,27 @@ static const uint16_t *pmw3610_arrows_profile_match(const struct pixart_config *
     return NULL;
 }
 
+/* arrows-alt-profiles: matches any active layer (not just highest).
+ * Used when arrows_alt_mode_g is true. */
+static bool arrows_alt_mode_g = false;
+
+void pmw3610_arrows_alt_mode_set(bool val) {
+    arrows_alt_mode_g = val;
+}
+
+static const uint16_t *pmw3610_arrows_alt_profile_match(const struct pixart_config *config) {
+    if (config->arrows_alt_profiles == NULL || config->arrows_alt_profiles_count == 0) {
+        return NULL;
+    }
+    for (size_t i = 0; i < config->arrows_alt_profiles_count; i++) {
+        const uint16_t *p = &config->arrows_alt_profiles[i * 8];
+        if (zmk_keymap_layer_active((uint8_t)p[0])) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
 //////// SPI helpers ////////
 
 static int pmw3610_read(const struct device *dev, uint8_t addr, uint8_t *value, uint8_t len) {
@@ -401,6 +422,18 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         case 1021: return (0x02U << 24) | HID_KB(0x51); /* Shift+Down */
         case 1022: return (0x02U << 24) | HID_KB(0x4F); /* Shift+Right */
         case 1023: return (0x02U << 24) | HID_KB(0x50); /* Shift+Left */
+        case 1040: return (0x04U << 24) | HID_KB(0x50); /* Opt+Left  (word-left)  */
+        case 1041: return (0x04U << 24) | HID_KB(0x51); /* Opt+Down  (para-down)  */
+        case 1042: return (0x04U << 24) | HID_KB(0x52); /* Opt+Up    (para-up)    */
+        case 1043: return (0x04U << 24) | HID_KB(0x4F); /* Opt+Right (word-right) */
+        case 1004: return (0x0AU << 24) | HID_KB(0x1D); /* Cmd+Shift+Z  (Redo)            */
+        case 1005: return (0x08U << 24) | HID_KB(0x04); /* Cmd+A        (全選択)           */
+        case 1060: return (0x01U << 24) | HID_KB(0x52); /* Ctrl+Up      (Mission Control)  */
+        case 1061: return (0x01U << 24) | HID_KB(0x51); /* Ctrl+Down    (App Expose)       */
+        case 1062: return (0x01U << 24) | HID_KB(0x50); /* Ctrl+Left    (前のデスクトップ)  */
+        case 1063: return (0x01U << 24) | HID_KB(0x4F); /* Ctrl+Right   (次のデスクトップ)  */
+        case 1064: return (0x0AU << 24) | HID_KB(0x2B); /* Cmd+Shift+Tab                  */
+        case 1065: return (0x08U << 24) | HID_KB(0x2B); /* Cmd+Tab      (アプリ切り替え)   */
         default:  return 0;
     }
 #undef HID_KB
@@ -797,6 +830,12 @@ static int pmw3610_report_data(const struct device *dev) {
      * Profile layout: [layer, key_up, key_down, key_left, key_right]
      * ====================================================== */
     const uint16_t *profile = pmw3610_arrows_profile_match(config);
+    if (arrows_alt_mode_g) {
+        const uint16_t *alt_profile = pmw3610_arrows_alt_profile_match(config);
+        if (alt_profile) {
+            profile = alt_profile;
+        }
+    }
     if (profile != NULL) {
         /* profile[0]=layer, [1]=up, [2]=down, [3]=left, [4]=right, [5]=tick(0=global), [6]=remainder, [7]=no_diagonal */
         uint16_t key_up    = profile[1];
@@ -1114,6 +1153,9 @@ static const struct sensor_driver_api pmw3610_driver_api = {
     COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles),                         \
         (static const uint16_t arrows_profiles_##n[] = DT_INST_PROP(n, arrows_profiles);), \
         ())                                                                         \
+    COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_alt_profiles),                     \
+        (static const uint16_t arrows_alt_profiles_##n[] = DT_INST_PROP(n, arrows_alt_profiles);), \
+        ())                                                                         \
     static struct pixart_data data##n;                                              \
     static const struct pixart_config config##n = {                                 \
         .spi = SPI_DT_SPEC_INST_GET(n, PMW3610_SPI_MODE, 0),                       \
@@ -1141,6 +1183,10 @@ static const struct sensor_driver_api pmw3610_driver_api = {
             (arrows_profiles_##n), (NULL)),                                         \
         .arrows_profiles_count = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_profiles), \
             (DT_INST_PROP_LEN(n, arrows_profiles) / 8), (0)),                      \
+        .arrows_alt_profiles = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_alt_profiles), \
+            (arrows_alt_profiles_##n), (NULL)),                                     \
+        .arrows_alt_profiles_count = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_alt_profiles), \
+            (DT_INST_PROP_LEN(n, arrows_alt_profiles) / 8), (0)),                  \
         .arrows_tick             = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),             \
         .arrows_diagonal         = DT_PROP(DT_DRV_INST(n), arrows_diagonal),                 \
         .arrows_accel            = DT_PROP(DT_DRV_INST(n), arrows_accel),                    \
