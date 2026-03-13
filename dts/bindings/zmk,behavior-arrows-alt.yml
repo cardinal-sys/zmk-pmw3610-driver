@@ -2,8 +2,6 @@ description: Momentary layer activation with arrows-alt mode for trackball
 
 compatible: "zmk,behavior-arrows-alt"
 
-include: [behavior.yaml]
-
 properties:
   "#binding-cells":
     type: int
