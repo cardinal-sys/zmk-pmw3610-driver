@@ -12,13 +12,13 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 static int on_arrows_alt_binding_pressed(struct zmk_behavior_binding *binding,
                                           struct zmk_behavior_binding_event event) {
     pmw3610_arrows_alt_mode_set(true);
-    zmk_keymap_layer_activate((uint8_t)binding->param1);
+    zmk_keymap_layer_activate((uint8_t)binding->param1, false);
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
 static int on_arrows_alt_binding_released(struct zmk_behavior_binding *binding,
                                            struct zmk_behavior_binding_event event) {
-    zmk_keymap_layer_deactivate((uint8_t)binding->param1);
+    zmk_keymap_layer_deactivate((uint8_t)binding->param1, false);
     pmw3610_arrows_alt_mode_set(false);
     return ZMK_BEHAVIOR_OPAQUE;
 }
