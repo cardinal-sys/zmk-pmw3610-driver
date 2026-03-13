@@ -6,3 +6,6 @@ properties:
   "#binding-cells":
     type: int
     const: 1
+
+binding-cells:
+  - param1
