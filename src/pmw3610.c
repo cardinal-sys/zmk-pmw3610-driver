@@ -434,6 +434,8 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         case 1063: return (0x01U << 24) | HID_KB(0x4F); /* Ctrl+Right   (次のデスクトップ)  */
         case 1064: return (0x0AU << 24) | HID_KB(0x2B); /* Cmd+Shift+Tab                  */
         case 1065: return (0x08U << 24) | HID_KB(0x2B); /* Cmd+Tab      (アプリ切り替え)   */
+        case 1066: return HID_KB(0x6A); /* F15 (左のデスクトップ) */
+        case 1067: return HID_KB(0x69); /* F14 (右のデスクトップ) */
         default:  return 0;
     }
 #undef HID_KB
