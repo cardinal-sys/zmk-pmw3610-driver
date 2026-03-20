@@ -54,6 +54,11 @@ struct pixart_data {
     int16_t                      last_x;
     int16_t                      last_y;
 
+    /* arrows swapper: modifier held across ticks (Cmd+Tab app switcher style) */
+    bool                         arrows_swapper_active;
+    uint32_t                     arrows_swapper_mod_usage;
+    struct k_work_delayable      arrows_swapper_release_work;
+
     /* numpad 2-stroke input state */
     int32_t                      numpad_dx;
     int32_t                      numpad_dy;
