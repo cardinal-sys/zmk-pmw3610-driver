@@ -436,6 +436,7 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         case 1065: return (0x08U << 24) | HID_KB(0x2B); /* Cmd+Tab      (アプリ切り替え)   */
         case 1066: return HID_KB(0x6A); /* F15 (左のデスクトップ) */
         case 1067: return HID_KB(0x69); /* F14 (右のデスクトップ) */
+        /* 1070/1071: swapper-style Cmd+Tab/Cmd+Shift+Tab — handled in pmw3610_send_arrow_key */
         default:  return 0;
     }
 #undef HID_KB
@@ -449,11 +450,56 @@ static void pmw3610_raise_key(uint16_t linux_key) {
     raise_zmk_keycode_state_changed_from_encoded(usage, false, k_uptime_get());
 }
 
+//////// Arrows swapper (Cmd held across ticks) ////////
+
+/* LGUI key usage (keyboard page 0x07, keycode 0xE3) — pressed as a key, not modifier byte */
+#define SWAPPER_LGUI_USAGE       ((0x07U << 16) | 0xE3U)
+#define SWAPPER_TAB_USAGE        ((0x07U << 16) | 0x2BU)
+#define SWAPPER_SHIFT_TAB_USAGE  ((0x02U << 24) | (0x07U << 16) | 0x2BU)
+/* Cmd auto-releases this many ms after the last swapper tick */
+#define ARROWS_SWAPPER_TIMEOUT_MS 600
+
+static void pmw3610_swapper_release_handler(struct k_work *work) {
+    struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
+    struct pixart_data *data = CONTAINER_OF(dwork, struct pixart_data, arrows_swapper_release_work);
+    if (data->arrows_swapper_active) {
+        raise_zmk_keycode_state_changed_from_encoded(data->arrows_swapper_mod_usage, false, k_uptime_get());
+        data->arrows_swapper_active    = false;
+        data->arrows_swapper_mod_usage = 0;
+        LOG_DBG("swapper: Cmd released");
+    }
+}
+
+/* key 1070: Swapper Cmd+Tab (forward app switch)
+ * key 1071: Swapper Cmd+Shift+Tab (reverse app switch)
+ * First tick holds Cmd; subsequent ticks within ARROWS_SWAPPER_TIMEOUT_MS tap Tab only. */
+static void pmw3610_swapper_fire(struct pixart_data *data, uint16_t key) {
+    uint32_t tab_usage = (key == 1070) ? SWAPPER_TAB_USAGE : SWAPPER_SHIFT_TAB_USAGE;
+
+    if (!data->arrows_swapper_active) {
+        data->arrows_swapper_active    = true;
+        data->arrows_swapper_mod_usage = SWAPPER_LGUI_USAGE;
+        raise_zmk_keycode_state_changed_from_encoded(SWAPPER_LGUI_USAGE, true, k_uptime_get());
+        k_msleep(5);
+        LOG_DBG("swapper: Cmd pressed");
+    }
+
+    raise_zmk_keycode_state_changed_from_encoded(tab_usage, true, k_uptime_get());
+    k_msleep(5);
+    raise_zmk_keycode_state_changed_from_encoded(tab_usage, false, k_uptime_get());
+
+    k_work_reschedule(&data->arrows_swapper_release_work, K_MSEC(ARROWS_SWAPPER_TIMEOUT_MS));
+}
+
 //////// Arrows helper ////////
 
 static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
-    ARG_UNUSED(dev);
-    pmw3610_raise_key(key);
+    if (key == 1070 || key == 1071) {
+        pmw3610_swapper_fire(dev->data, key);
+    } else {
+        ARG_UNUSED(dev);
+        pmw3610_raise_key(key);
+    }
 }
 
 //////// Numpad 2-stroke input ////////
@@ -1066,9 +1112,13 @@ static int pmw3610_init(const struct device *dev) {
     data->last_x       = 0;
     data->last_y       = 0;
 
+    data->arrows_swapper_active    = false;
+    data->arrows_swapper_mod_usage = 0;
+
     k_work_init(&data->trigger_work, pmw3610_work_callback);
     k_work_init_delayable(&data->inertia_work, pmw3610_inertia_work_handler);
     k_work_init_delayable(&data->arrows_repeat_work, pmw3610_arrows_repeat_handler);
+    k_work_init_delayable(&data->arrows_swapper_release_work, pmw3610_swapper_release_handler);
     k_work_init_delayable(&data->numpad_timeout_work, pmw3610_numpad_timeout_handler);
 
     err = pmw3610_init_irq(dev);
