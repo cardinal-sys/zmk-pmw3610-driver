@@ -50,8 +50,11 @@ properties:
     type: array
     description: |
       レイヤーごとのキーマッピング。
-      5個ずつのセットで記述: [layer, key_up, key_down, key_left, key_right]
+      9個ずつのセットで記述:
+      [layer, key_up, key_down, key_left, key_right, tick, use_remainder, no_diagonal, one_shot]
       複数レイヤーを並べて書ける。
+
+      one_shot=1 のとき、方向ごとに1回発火したら次の方向変化まで無視する。
 
       Linux keycode早見表:
         矢印キー  UP=103 DOWN=108 LEFT=105 RIGHT=106
@@ -60,11 +63,13 @@ properties:
         Enter          28
         Tab            15
         Escape         1
+        LANG2 (英数)   58
+        LANG1 (かな)   90
 
       例:
         arrows-profiles = <
-            3   103 108 105 106   /* layer 3: 矢印キー */
-            4   104 109 102 107   /* layer 4: PageUp/Down Home/End */
+            3   103 108 105 106  40  0  1  0  /* layer 3: 矢印キー */
+            4   104 109 102 107  40  0  1  0  /* layer 4: PageUp/Down Home/End */
         >;
   numpad-layers:
     type: array
@@ -187,7 +192,7 @@ properties:
     type: array
     description: |
       arrows_alt_mode が ON のときだけ有効なレイヤープロファイル。
-      8要素×Nプロファイル（arrows-profiles と同形式）:
-      [layer, key_up, key_down, key_left, key_right, tick_override, use_remainder, no_diagonal]
+      9要素×Nプロファイル（arrows-profiles と同形式）:
+      [layer, key_up, key_down, key_left, key_right, tick_override, use_remainder, no_diagonal, one_shot]
       zmk_keymap_layer_active() で判定するため最高レイヤーでなくても一致する。
       例: MOUSE レイヤー（4）で &arrows_alt 3 を保持中にレイヤー3のプロファイルを使う。

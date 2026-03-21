@@ -59,6 +59,10 @@ struct pixart_data {
     uint32_t                     arrows_swapper_mod_usage;
     struct k_work_delayable      arrows_swapper_release_work;
 
+    /* arrows one-shot: suppress repeated fires in same direction until direction reverses */
+    bool                         arrows_one_shot_x_done;
+    bool                         arrows_one_shot_y_done;
+
     /* numpad 2-stroke input state */
     int32_t                      numpad_dx;
     int32_t                      numpad_dy;
