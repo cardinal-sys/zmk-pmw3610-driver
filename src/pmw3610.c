@@ -459,7 +459,7 @@ static void pmw3610_raise_key(uint16_t linux_key) {
 #define SWAPPER_TAB_USAGE        ((0x07U << 16) | 0x2BU)
 #define SWAPPER_SHIFT_TAB_USAGE  ((0x02U << 24) | (0x07U << 16) | 0x2BU)
 /* Cmd auto-releases this many ms after the last swapper tick */
-#define ARROWS_SWAPPER_TIMEOUT_MS  2000
+#define ARROWS_SWAPPER_TIMEOUT_MS  1000
 /* Delay from Cmd press to first Tab (ms) */
 #define SWAPPER_CMD_TAB_DELAY_MS   30
 
