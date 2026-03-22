@@ -55,9 +55,18 @@ struct pixart_data {
     int16_t                      last_y;
 
     /* arrows swapper: modifier held across ticks (Cmd+Tab app switcher style) */
-    bool                         arrows_swapper_active;
-    uint32_t                     arrows_swapper_mod_usage;
+    enum {
+        SWAPPER_IDLE = 0,
+        SWAPPER_PENDING,
+        SWAPPER_ACTIVE,
+    }                            arrows_swapper_state;
+    uint16_t                     arrows_swapper_key;
+    struct k_work_delayable      arrows_swapper_tab_work;
     struct k_work_delayable      arrows_swapper_release_work;
+
+    /* arrows one-shot: suppress repeated fires in same direction until direction reverses */
+    bool                         arrows_one_shot_x_done;
+    bool                         arrows_one_shot_y_done;
 
     /* numpad 2-stroke input state */
     int32_t                      numpad_dx;
