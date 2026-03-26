@@ -484,7 +484,6 @@ static void pmw3610_swapper_tab_handler(struct k_work *work) {
 
     uint32_t tab_usage = (data->arrows_swapper_key == 1070) ? SWAPPER_TAB_USAGE : SWAPPER_SHIFT_TAB_USAGE;
     raise_zmk_keycode_state_changed_from_encoded(tab_usage, true, k_uptime_get());
-    k_busy_wait(5000);
     raise_zmk_keycode_state_changed_from_encoded(tab_usage, false, k_uptime_get());
 
     data->arrows_swapper_state = SWAPPER_ACTIVE;
@@ -497,7 +496,7 @@ static void pmw3610_swapper_tab_handler(struct k_work *work) {
  * State machine:
  *   IDLE    → press Cmd, store key, schedule tab_work in 30ms → PENDING
  *   PENDING → overwrite key (reverse), reschedule tab_work
- *   ACTIVE  → send Tab immediately with k_busy_wait
+ *   ACTIVE  → send Tab immediately
  * Timeout (600ms): release_work fires → IDLE */
 static void pmw3610_swapper_fire(struct pixart_data *data, uint16_t key) {
     switch (data->arrows_swapper_state) {
@@ -518,7 +517,6 @@ static void pmw3610_swapper_fire(struct pixart_data *data, uint16_t key) {
     case SWAPPER_ACTIVE: {
         uint32_t tab_usage = (key == 1070) ? SWAPPER_TAB_USAGE : SWAPPER_SHIFT_TAB_USAGE;
         raise_zmk_keycode_state_changed_from_encoded(tab_usage, true, k_uptime_get());
-        k_busy_wait(5000);
         raise_zmk_keycode_state_changed_from_encoded(tab_usage, false, k_uptime_get());
         LOG_DBG("swapper: ACTIVE Tab sent key=%u", key);
         break;
