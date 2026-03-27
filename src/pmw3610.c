@@ -448,7 +448,6 @@ static void pmw3610_raise_key(uint16_t linux_key) {
     uint32_t usage = linux_key_to_zmk(linux_key);
     if (usage == 0) return;
     raise_zmk_keycode_state_changed_from_encoded(usage, true, k_uptime_get());
-    k_msleep(5);
     raise_zmk_keycode_state_changed_from_encoded(usage, false, k_uptime_get());
 }
 
