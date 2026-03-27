@@ -807,8 +807,8 @@ static int pmw3610_report_data(const struct device *dev) {
         data->arrows_last_key  = 0;
         /* Abort swapper so Cmd+Tab doesn't fire unexpectedly on scroll layer */
         pmw3610_swapper_abort(data);
-        /* Cancel numpad timeout from a previous numpad session */
-        k_work_cancel_delayable(&data->numpad_timeout_work);
+        /* Reset numpad state from a previous numpad session */
+        pmw3610_numpad_reset(data);
 
         /* Flick detection: push raw delta into ring buffer */
         data->flick_hist_x[data->flick_idx] = x;
@@ -907,7 +907,7 @@ static int pmw3610_report_data(const struct device *dev) {
         k_work_cancel_delayable(&data->arrows_repeat_work);
         data->arrows_repeating = false;
         data->arrows_last_key  = 0;
-        k_work_cancel_delayable(&data->numpad_timeout_work);
+        pmw3610_numpad_reset(data);
         data->scroll_dx = 0;
         data->scroll_dy = 0;
         data->arrows_dx = 0;
@@ -963,7 +963,7 @@ static int pmw3610_report_data(const struct device *dev) {
         k_work_cancel_delayable(&data->inertia_work);
         data->inertia_vx = 0;
         data->inertia_vy = 0;
-        k_work_cancel_delayable(&data->numpad_timeout_work);
+        pmw3610_numpad_reset(data);
         data->scroll_dx = 0;
         data->scroll_dy = 0;
         data->snipe_dx  = 0;
@@ -1108,7 +1108,9 @@ static int pmw3610_report_data(const struct device *dev) {
     k_work_cancel_delayable(&data->arrows_repeat_work);
     data->arrows_repeating = false;
     data->arrows_last_key  = 0;
-    k_work_cancel_delayable(&data->numpad_timeout_work);
+    pmw3610_numpad_reset(data);
+    data->scroll_dx = 0;
+    data->scroll_dy = 0;
     data->snipe_dx  = 0;
     data->snipe_dy  = 0;
     data->arrows_dx = 0;
