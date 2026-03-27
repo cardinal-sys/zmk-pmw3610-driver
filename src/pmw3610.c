@@ -1109,8 +1109,6 @@ static int pmw3610_report_data(const struct device *dev) {
     data->arrows_repeating = false;
     data->arrows_last_key  = 0;
     pmw3610_numpad_reset(data);
-    data->scroll_dx = 0;
-    data->scroll_dy = 0;
     data->snipe_dx  = 0;
     data->snipe_dy  = 0;
     data->arrows_dx = 0;
