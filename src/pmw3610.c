@@ -462,6 +462,18 @@ static void pmw3610_raise_key(uint16_t linux_key) {
 /* Delay from Cmd press to first Tab (ms) */
 #define SWAPPER_CMD_TAB_DELAY_MS   30
 
+/* Immediately abort swapper: cancel pending works, release Cmd if held, reset state. */
+static void pmw3610_swapper_abort(struct pixart_data *data) {
+    k_work_cancel_delayable(&data->arrows_swapper_tab_work);
+    k_work_cancel_delayable(&data->arrows_swapper_release_work);
+    if (data->arrows_swapper_state != SWAPPER_IDLE) {
+        raise_zmk_keycode_state_changed_from_encoded(SWAPPER_LGUI_USAGE, false, k_uptime_get());
+        data->arrows_swapper_state = SWAPPER_IDLE;
+        data->arrows_swapper_key   = 0;
+        LOG_DBG("swapper: aborted → IDLE");
+    }
+}
+
 static void pmw3610_swapper_release_handler(struct k_work *work) {
     struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
     struct pixart_data *data = CONTAINER_OF(dwork, struct pixart_data, arrows_swapper_release_work);
@@ -793,6 +805,8 @@ static int pmw3610_report_data(const struct device *dev) {
         k_work_cancel_delayable(&data->arrows_repeat_work);
         data->arrows_repeating = false;
         data->arrows_last_key  = 0;
+        /* Abort swapper so Cmd+Tab doesn't fire unexpectedly on scroll layer */
+        pmw3610_swapper_abort(data);
 
         /* Flick detection: push raw delta into ring buffer */
         data->flick_hist_x[data->flick_idx] = x;
@@ -884,6 +898,7 @@ static int pmw3610_report_data(const struct device *dev) {
      * SNIPE LAYER: divide movement, carry over remainder
      * ====================================================== */
     if (pmw3610_layer_match(config->snipe_layers, config->snipe_layers_len)) {
+        pmw3610_swapper_abort(data);
         data->scroll_dx = 0;
         data->scroll_dy = 0;
         data->arrows_dx = 0;
@@ -1051,6 +1066,7 @@ static int pmw3610_report_data(const struct device *dev) {
      * 2nd stroke: 左=1/4/7  上=2/5/8  右=3/6/9
      * ====================================================== */
     if (pmw3610_layer_match(config->numpad_layers, config->numpad_layers_len)) {
+        pmw3610_swapper_abort(data);
         data->scroll_dx = 0;
         data->scroll_dy = 0;
         data->snipe_dx  = 0;
