@@ -789,6 +789,10 @@ static int pmw3610_report_data(const struct device *dev) {
             data->inertia_vx = 0;
             data->inertia_vy = 0;
         }
+        /* Cancel arrows auto-repeat so it doesn't fire while on scroll layer */
+        k_work_cancel_delayable(&data->arrows_repeat_work);
+        data->arrows_repeating = false;
+        data->arrows_last_key  = 0;
 
         /* Flick detection: push raw delta into ring buffer */
         data->flick_hist_x[data->flick_idx] = x;
