@@ -70,6 +70,21 @@ config PMW3610_ALT_INIT_POWER_UP_EXTRA_DELAY_MS
   int "Extra power up init delay (ms)"
   default 0
 
+choice
+  prompt "PMW3610 polling rate (Run mode)"
+  default PMW3610_ALT_POLLING_RATE_250
+  help
+    Selects the sensor polling rate during Run mode.
+    250 Hz (4 ms period) is the default. 125 Hz reduces power consumption
+    and can improve BLE connection stability.
+
+config PMW3610_ALT_POLLING_RATE_250
+  bool "250 Hz"
+
+config PMW3610_ALT_POLLING_RATE_125
+  bool "125 Hz"
+
+endchoice
 
 config PMW3610_ALT_SMART_ALGORITHM
   bool "Enable an algorithm of PMW3610 to enhance surface coverage"
