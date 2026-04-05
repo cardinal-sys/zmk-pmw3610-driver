@@ -265,26 +265,36 @@ static int pmw3610_set_performance(const struct device *dev, bool enabled) {
     const struct pixart_config *config = dev->config;
     int err = 0;
 
-    if (config->force_awake) {
-        uint8_t value;
-        err = pmw3610_read_reg(dev, PMW3610_REG_PERFORMANCE, &value);
+#if defined(CONFIG_PMW3610_ALT_POLLING_RATE_125)
+    /* 125 Hz: Performance register lower nibble = 0x00 */
+    uint8_t perf = 0x00;
+#else
+    /* 250 Hz (default): Performance register lower nibble = 0x0D */
+    uint8_t perf = 0x0D;
+#endif
+
+    if (enabled && config->force_awake) {
+        perf |= 0xF0;
+    }
+
+    uint8_t value;
+    err = pmw3610_read_reg(dev, PMW3610_REG_PERFORMANCE, &value);
+    if (err) {
+        LOG_ERR("Can't read performance %d", err);
+        return err;
+    }
+
+    if (perf != value) {
+        err = pmw3610_write(dev, PMW3610_REG_PERFORMANCE, perf);
         if (err) {
-            LOG_ERR("Can't read performance %d", err);
+            LOG_ERR("Can't write performance %d", err);
             return err;
         }
-
-        uint8_t perf = config->force_awake_4ms_mode ? 0x0d : (value & 0x0F);
-        if (enabled) {
-            perf |= 0xF0;
-        }
-        if (perf != value) {
-            err = pmw3610_write(dev, PMW3610_REG_PERFORMANCE, perf);
-            if (err) {
-                LOG_ERR("Can't write performance %d", err);
-                return err;
-            }
-        }
     }
+    LOG_INF("Set performance register: 0x%02x (polling=%s, force_awake=%s)",
+            perf,
+            IS_ENABLED(CONFIG_PMW3610_ALT_POLLING_RATE_125) ? "125Hz" : "250Hz",
+            (enabled && config->force_awake) ? "on" : "off");
     return err;
 }
 
