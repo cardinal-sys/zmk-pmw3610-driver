@@ -265,10 +265,12 @@ static int pmw3610_set_performance(const struct device *dev, bool enabled) {
     const struct pixart_config *config = dev->config;
     int err = 0;
 
-#if IS_ENABLED(CONFIG_PMW3610_ALT_POLLING_RATE_125)
-    uint8_t perf = 0x09; /* 125 Hz (8 ms period) */
+#if defined(CONFIG_PMW3610_ALT_POLLING_RATE_125)
+    /* 125 Hz: Performance register lower nibble = 0x00 */
+    uint8_t perf = 0x00;
 #else
-    uint8_t perf = 0x0d; /* 250 Hz (4 ms period) */
+    /* 250 Hz (default): Performance register lower nibble = 0x0D */
+    uint8_t perf = 0x0D;
 #endif
 
     if (enabled && config->force_awake) {
