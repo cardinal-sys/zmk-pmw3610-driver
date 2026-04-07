@@ -49,6 +49,16 @@ struct pixart_data {
     int16_t                      flick_hist_y[4];
     uint8_t                      flick_idx;
 
+    /* pointer inertia: velocity in fixed-point (*256) */
+    int32_t                      pointer_inertia_vx;
+    int32_t                      pointer_inertia_vy;
+    struct k_work_delayable      pointer_inertia_work;
+
+    /* pointer flick detection: ring buffer of recent raw deltas */
+    int16_t                      pointer_flick_hist_x[4];
+    int16_t                      pointer_flick_hist_y[4];
+    uint8_t                      pointer_flick_idx;
+
     /* 2-sample accumulation (POLLING_RATE_125_SW equivalent) */
     int64_t                      last_poll_time;
     int16_t                      last_x;
@@ -119,6 +129,14 @@ struct pixart_config {
     bool scroll_accel;               /* amplify scroll delta based on speed */
     int  scroll_accel_max_mult;      /* max multiplier at high speed (default 4) */
     int  scroll_accel_threshold;     /* raw delta speed to reach max mult (default 20) */
+    bool pointer_inertia;
+    int  pointer_inertia_decay;      /* slow-speed decay % (default 80) */
+    int  pointer_inertia_decay_fast; /* high-speed decay % (default 97) */
+    int  pointer_inertia_fast_spd;   /* speed threshold for fast decay (default 30) */
+    int  pointer_inertia_slow_spd;   /* speed threshold for slow decay (default 5) */
+    int  pointer_inertia_tick_ms;    /* timer interval ms (default 16) */
+    int  pointer_flick_threshold;    /* avg raw delta/sample to detect flick (default 8) */
+    int  pointer_flick_boost;        /* velocity multiplier *256 on flick (default 512=2x) */
     const uint8_t *numpad_layers;
     size_t numpad_layers_len;
     int  numpad_tick;          /* stroke threshold (default 15) */

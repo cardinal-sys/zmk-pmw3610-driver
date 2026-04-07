@@ -188,6 +188,37 @@ properties:
     description: |
       Raw delta speed at which maximum multiplier is reached. Default 20.
       小さいほど少ない動きで最大倍率に達する。
+  pointer-inertia:
+    type: boolean
+    description: Enable pointer (cursor) inertia/momentum on strong flick.
+  pointer-inertia-decay:
+    type: int
+    default: 80
+    description: Decay % at slow speed. Lower = stops faster. Default 80.
+  pointer-inertia-decay-fast:
+    type: int
+    default: 97
+    description: Decay % at fast speed. Higher = longer glide. Default 97.
+  pointer-inertia-slow-spd:
+    type: int
+    default: 5
+    description: Speed threshold for slow decay. Default 5.
+  pointer-inertia-fast-spd:
+    type: int
+    default: 30
+    description: Speed threshold for fast decay. Default 30.
+  pointer-inertia-tick-ms:
+    type: int
+    default: 16
+    description: Timer interval ms. Default 16.
+  pointer-flick-threshold:
+    type: int
+    default: 8
+    description: 4-sample avg delta to trigger flick. 0=always. Default 8.
+  pointer-flick-boost:
+    type: int
+    default: 512
+    description: Velocity multiplier *256 on flick. 512=2x. Default 512.
   arrows-alt-profiles:
     type: array
     description: |

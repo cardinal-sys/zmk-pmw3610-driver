@@ -735,6 +735,43 @@ static void pmw3610_inertia_work_handler(struct k_work *work) {
     }
 }
 
+//////// Pointer inertia ////////
+
+static void pmw3610_pointer_inertia_work_handler(struct k_work *work) {
+    struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
+    struct pixart_data *data = CONTAINER_OF(dwork, struct pixart_data, pointer_inertia_work);
+    const struct device *dev = data->dev;
+    const struct pixart_config *config = dev->config;
+    int spd = MAX(abs(data->pointer_inertia_vx), abs(data->pointer_inertia_vy)) / 256;
+    int decay;
+    if (spd >= config->pointer_inertia_fast_spd) {
+        decay = config->pointer_inertia_decay_fast;
+    } else if (spd <= config->pointer_inertia_slow_spd) {
+        decay = config->pointer_inertia_decay;
+    } else {
+        int range = config->pointer_inertia_fast_spd - config->pointer_inertia_slow_spd;
+        int t     = spd - config->pointer_inertia_slow_spd;
+        decay = config->pointer_inertia_decay +
+                (config->pointer_inertia_decay_fast - config->pointer_inertia_decay) * t / range;
+    }
+    data->pointer_inertia_vx = data->pointer_inertia_vx * decay / 100;
+    data->pointer_inertia_vy = data->pointer_inertia_vy * decay / 100;
+    int16_t vx = (int16_t)(data->pointer_inertia_vx / 256);
+    int16_t vy = (int16_t)(data->pointer_inertia_vy / 256);
+    if (vx != 0 || vy != 0) {
+        bool have_x = vx != 0;
+        bool have_y = vy != 0;
+        if (have_x) input_report(dev, config->evt_type, config->x_input_code, vx, !have_y, K_FOREVER);
+        if (have_y) input_report(dev, config->evt_type, config->y_input_code, vy, true, K_FOREVER);
+    }
+    if (abs(data->pointer_inertia_vx) >= 256 || abs(data->pointer_inertia_vy) >= 256) {
+        k_work_schedule(&data->pointer_inertia_work, K_MSEC(config->pointer_inertia_tick_ms));
+    } else {
+        data->pointer_inertia_vx = 0;
+        data->pointer_inertia_vy = 0;
+    }
+}
+
 //////// Arrows auto-repeat ////////
 
 static void pmw3610_arrows_repeat_handler(struct k_work *work) {
@@ -810,6 +847,12 @@ static int pmw3610_report_data(const struct device *dev) {
             k_work_cancel_delayable(&data->inertia_work);
             data->inertia_vx = 0;
             data->inertia_vy = 0;
+        }
+        /* Cancel pointer inertia */
+        if (config->pointer_inertia) {
+            k_work_cancel_delayable(&data->pointer_inertia_work);
+            data->pointer_inertia_vx = 0;
+            data->pointer_inertia_vy = 0;
         }
         /* Cancel arrows auto-repeat so it doesn't fire while on scroll layer */
         k_work_cancel_delayable(&data->arrows_repeat_work);
@@ -914,6 +957,11 @@ static int pmw3610_report_data(const struct device *dev) {
         k_work_cancel_delayable(&data->inertia_work);
         data->inertia_vx = 0;
         data->inertia_vy = 0;
+        if (config->pointer_inertia) {
+            k_work_cancel_delayable(&data->pointer_inertia_work);
+            data->pointer_inertia_vx = 0;
+            data->pointer_inertia_vy = 0;
+        }
         k_work_cancel_delayable(&data->arrows_repeat_work);
         data->arrows_repeating = false;
         data->arrows_last_key  = 0;
@@ -1093,6 +1141,11 @@ static int pmw3610_report_data(const struct device *dev) {
         k_work_cancel_delayable(&data->inertia_work);
         data->inertia_vx = 0;
         data->inertia_vy = 0;
+        if (config->pointer_inertia) {
+            k_work_cancel_delayable(&data->pointer_inertia_work);
+            data->pointer_inertia_vx = 0;
+            data->pointer_inertia_vy = 0;
+        }
         k_work_cancel_delayable(&data->arrows_repeat_work);
         data->arrows_repeating = false;
         data->arrows_last_key  = 0;
@@ -1124,6 +1177,15 @@ static int pmw3610_report_data(const struct device *dev) {
     data->arrows_dx = 0;
     data->arrows_dy = 0;
 
+    if (config->pointer_inertia) {
+        k_work_cancel_delayable(&data->pointer_inertia_work);
+        data->pointer_inertia_vx = 0;
+        data->pointer_inertia_vy = 0;
+        data->pointer_flick_hist_x[data->pointer_flick_idx] = x;
+        data->pointer_flick_hist_y[data->pointer_flick_idx] = y;
+        data->pointer_flick_idx = (data->pointer_flick_idx + 1) & 3;
+    }
+
     /* 2-sample accumulation: Dist版 POLLING_RATE_125_SW 相当 */
     int64_t curr_time = k_uptime_get();
     if (data->last_poll_time == 0 || curr_time - data->last_poll_time > 128) {
@@ -1147,6 +1209,23 @@ static int pmw3610_report_data(const struct device *dev) {
     }
     if (have_y) {
         input_report(dev, config->evt_type, config->y_input_code, y, true, K_FOREVER);
+    }
+
+    if (config->pointer_inertia && (have_x || have_y)) {
+        int32_t avg_x = ((int32_t)data->pointer_flick_hist_x[0] + data->pointer_flick_hist_x[1] +
+                          data->pointer_flick_hist_x[2] + data->pointer_flick_hist_x[3]) / 4;
+        int32_t avg_y = ((int32_t)data->pointer_flick_hist_y[0] + data->pointer_flick_hist_y[1] +
+                          data->pointer_flick_hist_y[2] + data->pointer_flick_hist_y[3]) / 4;
+        bool flick = (config->pointer_flick_threshold == 0) ||
+                     (abs(avg_x) >= config->pointer_flick_threshold ||
+                      abs(avg_y) >= config->pointer_flick_threshold);
+        if (flick) {
+            int32_t new_vx = (int32_t)x * 256 * config->pointer_flick_boost / 256;
+            int32_t new_vy = (int32_t)y * 256 * config->pointer_flick_boost / 256;
+            data->pointer_inertia_vx = new_vx;
+            data->pointer_inertia_vy = new_vy;
+            k_work_schedule(&data->pointer_inertia_work, K_MSEC(config->pointer_inertia_tick_ms * 2));
+        }
     }
 
     return 0;
@@ -1231,6 +1310,7 @@ static int pmw3610_init(const struct device *dev) {
 
     k_work_init(&data->trigger_work, pmw3610_work_callback);
     k_work_init_delayable(&data->inertia_work, pmw3610_inertia_work_handler);
+    k_work_init_delayable(&data->pointer_inertia_work, pmw3610_pointer_inertia_work_handler);
     k_work_init_delayable(&data->arrows_repeat_work, pmw3610_arrows_repeat_handler);
     k_work_init_delayable(&data->arrows_swapper_tab_work, pmw3610_swapper_tab_handler);
     k_work_init_delayable(&data->arrows_swapper_release_work, pmw3610_swapper_release_handler);
@@ -1372,6 +1452,14 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .scroll_accel              = DT_PROP(DT_DRV_INST(n), scroll_accel),                   \
         .scroll_accel_max_mult     = DT_PROP_OR(DT_DRV_INST(n), scroll_accel_max_mult, 4),    \
         .scroll_accel_threshold    = DT_PROP_OR(DT_DRV_INST(n), scroll_accel_threshold, 20),  \
+        .pointer_inertia           = DT_PROP(DT_DRV_INST(n), pointer_inertia),                \
+        .pointer_inertia_decay     = DT_PROP_OR(DT_DRV_INST(n), pointer_inertia_decay, 80),   \
+        .pointer_inertia_decay_fast = DT_PROP_OR(DT_DRV_INST(n), pointer_inertia_decay_fast, 97), \
+        .pointer_inertia_slow_spd  = DT_PROP_OR(DT_DRV_INST(n), pointer_inertia_slow_spd, 5), \
+        .pointer_inertia_fast_spd  = DT_PROP_OR(DT_DRV_INST(n), pointer_inertia_fast_spd, 30), \
+        .pointer_inertia_tick_ms   = DT_PROP_OR(DT_DRV_INST(n), pointer_inertia_tick_ms, 16), \
+        .pointer_flick_threshold   = DT_PROP_OR(DT_DRV_INST(n), pointer_flick_threshold, 8),  \
+        .pointer_flick_boost       = DT_PROP_OR(DT_DRV_INST(n), pointer_flick_boost, 512),    \
     };                                                                              \
     DEVICE_DT_INST_DEFINE(n, pmw3610_init, NULL, &data##n, &config##n,             \
                           POST_KERNEL, CONFIG_INPUT_PMW3610_INIT_PRIORITY,          \
