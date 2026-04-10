@@ -1186,21 +1186,6 @@ static int pmw3610_report_data(const struct device *dev) {
         data->pointer_flick_idx = (data->pointer_flick_idx + 1) & 3;
     }
 
-    /* 2-sample accumulation: Dist版 POLLING_RATE_125_SW 相当 */
-    int64_t curr_time = k_uptime_get();
-    if (data->last_poll_time == 0 || curr_time - data->last_poll_time > 128) {
-        data->last_poll_time = curr_time;
-        data->last_x = x;
-        data->last_y = y;
-        return 0;
-    } else {
-        x += data->last_x;
-        y += data->last_y;
-        data->last_poll_time = 0;
-        data->last_x = 0;
-        data->last_y = 0;
-    }
-
     bool have_x = x != 0;
     bool have_y = y != 0;
 
