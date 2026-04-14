@@ -397,7 +397,8 @@ static void pmw3610_async_init(struct k_work *work) {
 /* input_report(INPUT_EV_KEY) is NOT processed by ZMK's pointing input handler.
  * Must use ZMK's keycode_state_changed event system instead. */
 static uint32_t linux_key_to_zmk(uint16_t linux_key) {
-#define HID_KB(hid) (((uint32_t)0x07 << 16) | (hid))
+#define HID_KB(hid)       (((uint32_t)0x07 << 16) | (hid))
+#define HID_CONSUMER(hid) (((uint32_t)0x0C << 16) | (hid))
     switch (linux_key) {
         case 102: return HID_KB(0x4A); /* Home */
         case 103: return HID_KB(0x52); /* Up */
@@ -449,9 +450,15 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         /* 1070/1071: swapper-style Cmd+Tab/Cmd+Shift+Tab — handled in pmw3610_send_arrow_key */
         case 58:  return HID_KB(0x91); /* LANG2 (英数) */
         case 90:  return HID_KB(0x90); /* LANG1 (かな) */
+        /* Consumer page (0x0C): Linux standard media keycodes */
+        case 114: return HID_CONSUMER(0xEA); /* KEY_VOLUMEDOWN  → C_VOL_DN */
+        case 115: return HID_CONSUMER(0xE9); /* KEY_VOLUMEUP    → C_VOL_UP */
+        case 163: return HID_CONSUMER(0xB5); /* KEY_NEXTSONG    → C_NEXT   */
+        case 165: return HID_CONSUMER(0xB6); /* KEY_PREVIOUSSONG→ C_PREV   */
         default:  return 0;
     }
 #undef HID_KB
+#undef HID_CONSUMER
 }
 
 static void pmw3610_raise_key(uint16_t linux_key) {
