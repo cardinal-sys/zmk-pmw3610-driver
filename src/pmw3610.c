@@ -447,6 +447,8 @@ static uint32_t linux_key_to_zmk(uint16_t linux_key) {
         case 1065: return (0x08U << 24) | HID_KB(0x2B); /* Cmd+Tab      (アプリ切り替え)   */
         case 1066: return HID_KB(0x6A); /* F15 (左のデスクトップ) */
         case 1067: return HID_KB(0x69); /* F14 (右のデスクトップ) */
+        case 1068: return (0x0CU << 24) | HID_KB(0x29); /* Cmd+Opt+Esc  (強制終了)          */
+        case 1069: return (0x09U << 24) | HID_KB(0x14); /* Ctrl+Cmd+Q   (画面ロック)        */
         /* 1070/1071: swapper-style Cmd+Tab/Cmd+Shift+Tab — handled in pmw3610_send_arrow_key */
         case 58:  return HID_KB(0x91); /* LANG2 (英数) */
         case 90:  return HID_KB(0x90); /* LANG1 (かな) */
