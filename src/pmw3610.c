@@ -273,7 +273,7 @@ static int pmw3610_set_performance(const struct device *dev, bool enabled) {
     uint8_t perf = 0x0D;
 #endif
 
-    if (enabled && config->force_awake) {
+    if (config->force_awake) {
         perf |= 0xF0;
     }
 
@@ -294,7 +294,7 @@ static int pmw3610_set_performance(const struct device *dev, bool enabled) {
     LOG_INF("Set performance register: 0x%02x (polling=%s, force_awake=%s)",
             perf,
             IS_ENABLED(CONFIG_PMW3610_ALT_POLLING_RATE_125) ? "125Hz" : "250Hz",
-            (enabled && config->force_awake) ? "on" : "off");
+            config->force_awake ? "always-on" : (enabled ? "on" : "off"));
     return err;
 }
 
