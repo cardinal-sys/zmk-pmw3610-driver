@@ -564,6 +564,14 @@ static void pmw3610_swapper_fire(struct pixart_data *data, uint16_t key) {
 static void pmw3610_send_arrow_key(const struct device *dev, uint16_t key) {
     if (key == 1070 || key == 1071) {
         pmw3610_swapper_fire(dev->data, key);
+    } else if (key >= 2000 && key <= 2003) {
+        /* Scroll wheel emit: bypass HID keycode path, send REL_WHEEL/REL_HWHEEL */
+        switch (key) {
+        case 2000: input_report_rel(dev, INPUT_REL_WHEEL,   1, true, K_FOREVER); break; /* up    */
+        case 2001: input_report_rel(dev, INPUT_REL_WHEEL,  -1, true, K_FOREVER); break; /* down  */
+        case 2002: input_report_rel(dev, INPUT_REL_HWHEEL, -1, true, K_FOREVER); break; /* left  */
+        case 2003: input_report_rel(dev, INPUT_REL_HWHEEL,  1, true, K_FOREVER); break; /* right */
+        }
     } else {
         ARG_UNUSED(dev);
         pmw3610_raise_key(key);
