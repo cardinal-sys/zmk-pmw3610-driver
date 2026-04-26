@@ -105,6 +105,9 @@ struct pixart_config {
     size_t snipe_layers_len;
     const uint8_t *arrows_no_repeat_layers;
     size_t arrows_no_repeat_layers_len;
+    /* cpi-layers: flat array of [layer, cpi] uint16 pairs. Layer active → switch sensor CPI. */
+    const uint16_t *cpi_layers;
+    size_t cpi_layers_count;
     /* arrows profiles: flat array of [layer, key_up, key_down, key_left, key_right, ...] */
     const uint16_t *arrows_profiles;
     size_t arrows_profiles_count;  /* number of profiles (array_len / 5) */

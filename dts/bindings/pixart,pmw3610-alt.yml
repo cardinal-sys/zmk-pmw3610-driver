@@ -46,6 +46,12 @@ properties:
       Driver divides cursor movement by CONFIG_PMW3610_ALT_SNIPE_CPI_DIVIDOR,
       with remainder carry-over for lossless precision.
       Example: snipe-layers = <15>;
+  cpi-layers:
+    type: array
+    description: |
+      Layer-driven CPI override. Flat array of [layer, cpi] uint16 pairs.
+      Highest active matching layer's CPI is applied; falls back to base cpi
+      when none active. Example: cpi-layers = <4 3200>;
   arrows-profiles:
     type: array
     description: |

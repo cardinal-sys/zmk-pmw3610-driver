@@ -13,6 +13,7 @@
 #include <string.h>
 #include <zmk/keymap.h>
 #include <zmk/events/activity_state_changed.h>
+#include <zmk/events/layer_state_changed.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
 #include "pmw3610.h"
@@ -1425,6 +1426,9 @@ static const struct sensor_driver_api pmw3610_driver_api = {
     COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_alt_profiles),                     \
         (static const uint16_t arrows_alt_profiles_##n[] = DT_INST_PROP(n, arrows_alt_profiles);), \
         ())                                                                         \
+    COND_CODE_1(DT_INST_NODE_HAS_PROP(n, cpi_layers),                              \
+        (static const uint16_t cpi_layers_##n[] = DT_INST_PROP(n, cpi_layers);),    \
+        ())                                                                         \
     static struct pixart_data data##n;                                              \
     static const struct pixart_config config##n = {                                 \
         .spi = SPI_DT_SPEC_INST_GET(n, PMW3610_SPI_MODE, 0),                       \
@@ -1456,6 +1460,10 @@ static const struct sensor_driver_api pmw3610_driver_api = {
             (arrows_alt_profiles_##n), (NULL)),                                     \
         .arrows_alt_profiles_count = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, arrows_alt_profiles), \
             (DT_INST_PROP_LEN(n, arrows_alt_profiles) / 9), (0)),                  \
+        .cpi_layers = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, cpi_layers),            \
+            (cpi_layers_##n), (NULL)),                                              \
+        .cpi_layers_count = COND_CODE_1(DT_INST_NODE_HAS_PROP(n, cpi_layers),      \
+            (DT_INST_PROP_LEN(n, cpi_layers) / 2), (0)),                           \
         .arrows_tick             = DT_PROP_OR(DT_DRV_INST(n), arrows_tick, 10),             \
         .arrows_diagonal         = DT_PROP(DT_DRV_INST(n), arrows_diagonal),                 \
         .arrows_accel            = DT_PROP(DT_DRV_INST(n), arrows_accel),                    \
@@ -1510,3 +1518,33 @@ static int on_activity_state(const zmk_event_t *eh) {
 
 ZMK_LISTENER(zmk_pmw3610_idle_sleeper, on_activity_state);
 ZMK_SUBSCRIPTION(zmk_pmw3610_idle_sleeper, zmk_activity_state_changed);
+
+//////// CPI layers: per-layer CPI override ////////
+
+static int pmw3610_apply_layer_cpi(const struct device *dev) {
+    const struct pixart_config *cfg = dev->config;
+    if (cfg->cpi_layers == NULL || cfg->cpi_layers_count == 0) return 0;
+    uint16_t target_cpi = cfg->cpi;
+    int target_layer = -1;
+    /* Pick highest active matching layer (later entries win when tied highest) */
+    for (size_t i = 0; i < cfg->cpi_layers_count; i++) {
+        uint8_t layer = (uint8_t)cfg->cpi_layers[i * 2];
+        uint16_t lcpi = cfg->cpi_layers[i * 2 + 1];
+        if (zmk_keymap_layer_active(layer) && (int)layer > target_layer) {
+            target_layer = layer;
+            target_cpi = lcpi;
+        }
+    }
+    return pmw3610_set_cpi(dev, target_cpi, cfg->swap_xy, cfg->inv_x, cfg->inv_y);
+}
+
+static int on_layer_state_for_cpi(const zmk_event_t *eh) {
+    ARG_UNUSED(eh);
+    for (size_t i = 0; i < ARRAY_SIZE(pmw3610_devs); i++) {
+        pmw3610_apply_layer_cpi(pmw3610_devs[i]);
+    }
+    return 0;
+}
+
+ZMK_LISTENER(zmk_pmw3610_cpi_layers, on_layer_state_for_cpi);
+ZMK_SUBSCRIPTION(zmk_pmw3610_cpi_layers, zmk_layer_state_changed);
