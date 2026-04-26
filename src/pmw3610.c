@@ -971,8 +971,10 @@ static int pmw3610_report_data(const struct device *dev) {
 
     /* ======================================================
      * SNIPE LAYER: divide movement, carry over remainder
+     * arrows_alt_mode が ON の時は arrows 経路を優先するため SNIPE をスキップ
      * ====================================================== */
-    if (pmw3610_layer_match(config->snipe_layers, config->snipe_layers_len)) {
+    if (!arrows_alt_mode_g &&
+        pmw3610_layer_match(config->snipe_layers, config->snipe_layers_len)) {
         pmw3610_swapper_abort(data);
         k_work_cancel_delayable(&data->inertia_work);
         data->inertia_vx = 0;
