@@ -1224,6 +1224,44 @@ static int pmw3610_report_data(const struct device *dev) {
         data->last_y = 0;
     }
 
+    /* ======================================================
+     * IIR FILTER: Motion noise reduction
+     * Smooths raw sensor deltas to reduce jitter
+     * ====================================================== */
+    if (config->iir_filter_alpha > 0 && config->iir_filter_alpha <= 1024) {
+        int32_t alpha = config->iir_filter_alpha;
+        int32_t new_x = ((int32_t)x * alpha + data->filtered_x * (1024 - alpha)) / 1024;
+        int32_t new_y = ((int32_t)y * alpha + data->filtered_y * (1024 - alpha)) / 1024;
+        data->filtered_x = new_x;
+        data->filtered_y = new_y;
+        x = (int16_t)new_x;
+        y = (int16_t)new_y;
+    }
+
+    /* ======================================================
+     * SPEED-BASED CPI: Dynamically adjust sensor sensitivity
+     * Low speed (trembling) → lower CPI for precision
+     * High speed (flicking) → higher CPI for faster tracking
+     * ====================================================== */
+    if (config->speed_based_cpi) {
+        int32_t speed = abs(x) + abs(y);
+        uint32_t new_cpi = config->speed_cpi_medium;
+
+        if (speed < config->speed_cpi_low_threshold) {
+            new_cpi = config->speed_cpi_low;
+        } else if (speed >= config->speed_cpi_high_threshold) {
+            new_cpi = config->speed_cpi_high;
+        }
+
+        if (new_cpi != data->current_cpi) {
+            data->current_cpi = new_cpi;
+            pmw3610_set_cpi(dev, new_cpi, config->swap_xy, config->inv_x, config->inv_y);
+        }
+
+        data->recent_speed_x = x;
+        data->recent_speed_y = y;
+    }
+
     bool have_x = x != 0;
     bool have_y = y != 0;
 
@@ -1327,6 +1365,13 @@ static int pmw3610_init(const struct device *dev) {
     data->last_poll_time = 0;
     data->last_x       = 0;
     data->last_y       = 0;
+
+    /* IIR filter and speed-based CPI initialization */
+    data->filtered_x   = 0;
+    data->filtered_y   = 0;
+    data->current_cpi  = config->cpi;
+    data->recent_speed_x = 0;
+    data->recent_speed_y = 0;
 
     data->arrows_swapper_state = SWAPPER_IDLE;
     data->arrows_swapper_key   = 0;
@@ -1490,6 +1535,13 @@ static const struct sensor_driver_api pmw3610_driver_api = {
         .pointer_inertia_tick_ms   = DT_PROP_OR(DT_DRV_INST(n), pointer_inertia_tick_ms, 16), \
         .pointer_flick_threshold   = DT_PROP_OR(DT_DRV_INST(n), pointer_flick_threshold, 8),  \
         .pointer_flick_boost       = DT_PROP_OR(DT_DRV_INST(n), pointer_flick_boost, 512),    \
+        .iir_filter_alpha          = DT_PROP_OR(DT_DRV_INST(n), iir_filter_alpha, 614),       \
+        .speed_based_cpi           = DT_PROP_OR(DT_DRV_INST(n), speed_based_cpi, 0),          \
+        .speed_cpi_low_threshold   = DT_PROP_OR(DT_DRV_INST(n), speed_cpi_low_threshold, 5),  \
+        .speed_cpi_high_threshold  = DT_PROP_OR(DT_DRV_INST(n), speed_cpi_high_threshold, 30),\
+        .speed_cpi_low             = DT_PROP_OR(DT_DRV_INST(n), speed_cpi_low, 1200),         \
+        .speed_cpi_medium          = DT_PROP_OR(DT_DRV_INST(n), speed_cpi_medium, 2200),      \
+        .speed_cpi_high            = DT_PROP_OR(DT_DRV_INST(n), speed_cpi_high, 3200),        \
     };                                                                              \
     DEVICE_DT_INST_DEFINE(n, pmw3610_init, NULL, &data##n, &config##n,             \
                           POST_KERNEL, CONFIG_INPUT_PMW3610_INIT_PRIORITY,          \

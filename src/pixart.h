@@ -64,6 +64,15 @@ struct pixart_data {
     int16_t                      last_x;
     int16_t                      last_y;
 
+    /* IIR filter state for noise reduction */
+    int32_t                      filtered_x;
+    int32_t                      filtered_y;
+
+    /* Speed-based CPI tracking */
+    uint32_t                     current_cpi;
+    int32_t                      recent_speed_x;
+    int32_t                      recent_speed_y;
+
     /* arrows swapper: modifier held across ticks (Cmd+Tab app switcher style) */
     enum {
         SWAPPER_IDLE = 0,
@@ -140,6 +149,15 @@ struct pixart_config {
     int  pointer_inertia_tick_ms;    /* timer interval ms (default 16) */
     int  pointer_flick_threshold;    /* avg raw delta/sample to detect flick (default 8) */
     int  pointer_flick_boost;        /* velocity multiplier *256 on flick (default 512=2x) */
+    /* IIR filter for motion noise reduction (fixed-point *1024) */
+    int  iir_filter_alpha;           /* filter coefficient (0-1024, default 614 ≈ 0.6) */
+    /* Speed-based CPI: dynamically adjust CPI based on movement speed */
+    bool speed_based_cpi;            /* enable speed-based CPI adjustment */
+    int  speed_cpi_low_threshold;    /* raw delta threshold for low speed (default 5) */
+    int  speed_cpi_high_threshold;   /* raw delta threshold for high speed (default 30) */
+    uint32_t speed_cpi_low;          /* CPI for slow movements (default 1200) */
+    uint32_t speed_cpi_medium;       /* CPI for medium movements (default 2200) */
+    uint32_t speed_cpi_high;         /* CPI for fast movements (default 3200) */
     const uint8_t *numpad_layers;
     size_t numpad_layers_len;
     int  numpad_tick;          /* stroke threshold (default 15) */
