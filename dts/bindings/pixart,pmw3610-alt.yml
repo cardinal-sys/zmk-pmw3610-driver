@@ -233,3 +233,46 @@ properties:
       [layer, key_up, key_down, key_left, key_right, tick_override, use_remainder, no_diagonal, one_shot]
       zmk_keymap_layer_active() で判定するため最高レイヤーでなくても一致する。
       例: MOUSE レイヤー（4）で &arrows_alt 3 を保持中にレイヤー3のプロファイルを使う。
+  iir-filter-alpha:
+    type: int
+    default: 614
+    description: |
+      IIR フィルタの固定小数点係数（α = coefficient / 1024）。
+      614 = 0.6, 512 = 0.5. モーションノイズ低減用。
+      値が大きいほど現在値の影響が強くなり、応答性が上がる一方、ノイズが残りやすくなる。
+      Default: 614 (α=0.6, 低レイテンシ向け)
+  speed-based-cpi:
+    type: boolean
+    description: |
+      Enable speed-based CPI dynamic adjustment.
+      Raw delta speed に基づいて 3段階の CPI を自動切り替える。
+  speed-cpi-low-threshold:
+    type: int
+    default: 5
+    description: |
+      Low speed threshold (raw delta/sample). Below this: speed-cpi-low.
+      Default: 5 (精密操作向け)
+  speed-cpi-high-threshold:
+    type: int
+    default: 30
+    description: |
+      High speed threshold (raw delta/sample). Above this: speed-cpi-high.
+      Default: 30 (高速移動向け)
+  speed-cpi-low:
+    type: int
+    default: 1200
+    description: |
+      CPI value for low speed (≤ speed-cpi-low-threshold).
+      Default: 1200 (精密モード)
+  speed-cpi-medium:
+    type: int
+    default: 2200
+    description: |
+      CPI value for medium speed (between low and high thresholds).
+      Default: 2200 (通常モード)
+  speed-cpi-high:
+    type: int
+    default: 3200
+    description: |
+      CPI value for high speed (≥ speed-cpi-high-threshold).
+      Default: 3200 (高速モード)
